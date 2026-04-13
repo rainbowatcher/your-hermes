@@ -23,7 +23,7 @@ const emits = defineEmits<{
   <div class="grid min-h-0 content-start gap-3">
     <Card class="min-h-0 border-border/70">
       <CardHeader>
-        <CardTitle class="text-xs font-medium">用户导航</CardTitle>
+        <CardTitle class="text-xs font-medium">消息导航</CardTitle>
       </CardHeader>
       <ScrollArea class="max-h-80">
         <CardContent class="px-1">
