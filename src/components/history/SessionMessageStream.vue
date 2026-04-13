@@ -54,43 +54,42 @@ const filteredMessages = computed(() =>
   ),
 )
 
-function isToolExpanded(messageId: string) {
+function hasExpandedTool(messageId: string) {
   return expandedToolIds.value.includes(messageId)
 }
 
 function toggleToolMessage(messageId: string) {
-  expandedToolIds.value = isToolExpanded(messageId)
+  expandedToolIds.value = hasExpandedTool(messageId)
     ? expandedToolIds.value.filter((id) => id !== messageId)
     : [...expandedToolIds.value, messageId]
 }
 
-function toolViewKey(messageId: string, callId: string) {
-  return `${messageId}:${callId}`
+function toolViewModeKey(messageId: string, toolCallId: string) {
+  return `${messageId}:${toolCallId}`
 }
 
-function setToolViewMode(messageId: string, toolCall: ToolCallEntry, mode: ToolMessageViewMode) {
-  toolViewModes.value[toolViewKey(messageId, toolCall.id)] = mode
-}
-
-function toolViewMode(messageId: string, toolCall: ToolCallEntry) {
+function readToolViewMode(messageId: string, toolCall: ToolCallEntry) {
   return (
-    toolViewModes.value[toolViewKey(messageId, toolCall.id)] ||
+    toolViewModes.value[toolViewModeKey(messageId, toolCall.id)] ||
     (toolCall.primaryContent ? 'output' : 'raw')
   )
 }
 
-function toolContent(messageId: string, toolCall: ToolCallEntry) {
-  if (toolViewMode(messageId, toolCall) === 'raw') {
-    return toolCall.rawJson
-  }
-  return toolCall.primaryContent || toolCall.rawJson
+function writeToolViewMode(messageId: string, toolCall: ToolCallEntry, mode: ToolMessageViewMode) {
+  toolViewModes.value[toolViewModeKey(messageId, toolCall.id)] = mode
 }
 
-function textViewMode(messageId: string) {
+function readToolContent(messageId: string, toolCall: ToolCallEntry) {
+  return readToolViewMode(messageId, toolCall) === 'raw'
+    ? toolCall.rawJson
+    : toolCall.primaryContent || toolCall.rawJson
+}
+
+function readTextViewMode(messageId: string) {
   return textViewModes.value[messageId] || 'render'
 }
 
-function setTextViewMode(messageId: string, mode: TextMessageViewMode) {
+function writeTextViewMode(messageId: string, mode: TextMessageViewMode) {
   textViewModes.value[messageId] = mode
 }
 
@@ -130,19 +129,19 @@ function roleIcon(role: MessageRole) {
         >
           <SessionToolMessage
             v-if="message.role === 'tool'"
-            :expanded="isToolExpanded(message.id)"
+            :expanded="hasExpandedTool(message.id)"
             :message="message"
-            :tool-content="(toolCall) => toolContent(message.id, toolCall)"
-            :tool-view-mode="(toolCall) => toolViewMode(message.id, toolCall)"
+            :tool-content="(toolCall) => readToolContent(message.id, toolCall)"
+            :tool-view-mode="(toolCall) => readToolViewMode(message.id, toolCall)"
             @toggle="toggleToolMessage(message.id)"
-            @update:tool-view-mode="setToolViewMode(message.id, $event.toolCall, $event.mode)"
+            @update:tool-view-mode="writeToolViewMode(message.id, $event.toolCall, $event.mode)"
           />
 
           <SessionRichTextMessage
             v-else-if="message.role === 'user' || message.role === 'assistant'"
             :message="message"
-            :mode="textViewMode(message.id)"
-            @update:mode="setTextViewMode(message.id, $event)"
+            :mode="readTextViewMode(message.id)"
+            @update:mode="writeTextViewMode(message.id, $event)"
           />
 
           <p v-else class="mt-2 whitespace-pre-wrap text-sm leading-6">
