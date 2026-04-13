@@ -13,6 +13,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import type { SessionMessage, ToolCallEntry, ToolMessageViewMode } from '@/types/history'
+import Badge from '../ui/badge/Badge.vue'
 
 const props = defineProps<{
   expanded: boolean
@@ -55,9 +56,14 @@ const emits = defineEmits<{
           <AccordionTrigger
             class="gap-2 px-0 py-2 text-[11px] text-current/80 no-underline hover:no-underline"
           >
-            <div class="flex min-w-0 flex-1 items-center gap-2">
+            <div class="flex min-w-0 flex-1 items-center justify-between gap-2">
               <span class="truncate font-medium text-current">{{ toolCall.title }}</span>
-              <span class="truncate">{{ toolCall.preview }}</span>
+              <Badge
+                variant="outline"
+                v-if="toolCall.hasError"
+                class="rounded-sm border-current/20 bg-transparent"
+                >error</Badge
+              >
             </div>
           </AccordionTrigger>
           <AccordionContent class="h-auto px-0 pb-2 pt-0">
