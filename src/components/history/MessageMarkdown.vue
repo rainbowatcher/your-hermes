@@ -3,25 +3,25 @@
   不负责：消息切换按钮与消息列表编排。
 -->
 <script setup lang="ts">
-import { ref, watch } from "vue";
-import { renderMarkdown } from "@/lib/markdown";
+import { ref, watch } from 'vue'
+import { renderMarkdown } from '@/lib/markdown'
 
 const props = defineProps<{
-  content: string;
-}>();
+  content: string
+}>()
 
-const html = ref("");
-const isLoading = ref(false);
+const html = ref('')
+const isLoading = ref(false)
 
 watch(
   () => props.content,
   async (value) => {
-    isLoading.value = true;
-    html.value = await renderMarkdown(value);
-    isLoading.value = false;
+    isLoading.value = true
+    html.value = await renderMarkdown(value)
+    isLoading.value = false
   },
   { immediate: true },
-);
+)
 </script>
 
 <template>

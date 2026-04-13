@@ -30,13 +30,15 @@ const emits = defineEmits<{
     <div class="flex flex-col gap-2 xl:flex-row xl:items-center xl:justify-between">
       <div class="flex min-w-0 items-center gap-2">
         <div class="relative min-w-0 flex-1 xl:w-80">
-          <Search class="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+          <Search
+            class="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground"
+          />
           <Input
             :model-value="props.search"
             class="h-8 pl-8"
             placeholder="搜索"
             title="搜索标题、平台、频道、标签"
-            @update:model-value="value => emits('update:search', String(value))"
+            @update:model-value="(value) => emits('update:search', String(value))"
           />
         </div>
 

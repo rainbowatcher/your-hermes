@@ -10,7 +10,7 @@ async function requestJson<T>(url: string): Promise<T> {
     throw new Error(`请求失败：${response.status} ${response.statusText}`)
   }
 
-  return await response.json() as T
+  return (await response.json()) as T
 }
 
 export async function fetchSessions() {
@@ -18,5 +18,7 @@ export async function fetchSessions() {
 }
 
 export async function fetchSessionDetail(sessionId: string) {
-  return await requestJson<{ session: SessionDetail | null }>(`/api/hermes/sessions/${encodeURIComponent(sessionId)}`)
+  return await requestJson<{ session: SessionDetail | null }>(
+    `/api/hermes/sessions/${encodeURIComponent(sessionId)}`,
+  )
 }

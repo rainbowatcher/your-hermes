@@ -6,7 +6,12 @@ import { computed, reactive, ref } from 'vue'
 import { defineStore } from 'pinia'
 import { useStorage } from '@vueuse/core'
 import { fetchSessionDetail, fetchSessions } from '@/api/hermes'
-import type { MessageRoleFilter, SessionDetail, SessionStatusFilter, SessionSummary } from '@/types/history'
+import type {
+  MessageRoleFilter,
+  SessionDetail,
+  SessionStatusFilter,
+  SessionSummary,
+} from '@/types/history'
 
 export type SessionSort = 'recent' | 'longest'
 
@@ -30,7 +35,9 @@ function includesKeyword(session: SessionSummary, keyword: string) {
     session.platform,
     session.chatType,
     session.tags.join(' '),
-  ].join(' ').toLowerCase()
+  ]
+    .join(' ')
+    .toLowerCase()
 
   return haystack.includes(keyword.toLowerCase())
 }
@@ -55,7 +62,9 @@ export const useSessionHistoryStore = defineStore('session-history', () => {
 
     return [...filtered].sort((left, right) => {
       if (sort.value === 'longest') {
-        return right.messageCount - left.messageCount || right.toolMessageCount - left.toolMessageCount
+        return (
+          right.messageCount - left.messageCount || right.toolMessageCount - left.toolMessageCount
+        )
       }
 
       return +new Date(right.updatedAt) - +new Date(left.updatedAt)
@@ -84,14 +93,18 @@ export const useSessionHistoryStore = defineStore('session-history', () => {
     return Array.from(groups.values())
   })
 
-  const selectedSessionSummary = computed(() => sessions.value.find(session => session.id === selectedId.value) || null)
-  const selectedSession = computed(() => selectedId.value ? detailMap[selectedId.value] || null : null)
+  const selectedSessionSummary = computed(
+    () => sessions.value.find((session) => session.id === selectedId.value) || null,
+  )
+  const selectedSession = computed(() =>
+    selectedId.value ? detailMap[selectedId.value] || null : null,
+  )
   const availableMessageRoles = computed(() => selectedSession.value?.availableRoles || [])
 
   const stats = computed(() => ({
     total: sessions.value.length,
-    attention: sessions.value.filter(session => session.status === 'attention').length,
-    active: sessions.value.filter(session => session.status === 'active').length,
+    attention: sessions.value.filter((session) => session.status === 'attention').length,
+    active: sessions.value.filter((session) => session.status === 'active').length,
     issueMessages: sessions.value.reduce((count, session) => count + session.issueCount, 0),
   }))
 
@@ -105,11 +118,9 @@ export const useSessionHistoryStore = defineStore('session-history', () => {
       if (!selectedId.value && response.sessions.length > 0) {
         selectedId.value = response.sessions[0].id
       }
-    }
-    catch (error) {
+    } catch (error) {
       loadError.value = error instanceof Error ? error.message : '读取会话列表失败'
-    }
-    finally {
+    } finally {
       isLoadingSessions.value = false
     }
   }
@@ -129,12 +140,10 @@ export const useSessionHistoryStore = defineStore('session-history', () => {
         return response.session
       }
       return null
-    }
-    catch (error) {
+    } catch (error) {
       loadError.value = error instanceof Error ? error.message : '读取会话详情失败'
       return null
-    }
-    finally {
+    } finally {
       isLoadingDetail.value = false
     }
   }

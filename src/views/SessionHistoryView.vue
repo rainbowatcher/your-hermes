@@ -16,7 +16,7 @@ const theme = useThemeStore()
 const route = useRoute()
 const router = useRouter()
 
-const filteredIds = computed(() => new Set(store.filteredSessions.map(session => session.id)))
+const filteredIds = computed(() => new Set(store.filteredSessions.map((session) => session.id)))
 
 function syncRouteSelection() {
   if (store.isLoadingSessions) {
@@ -24,9 +24,10 @@ function syncRouteSelection() {
   }
 
   const sessionId = typeof route.params.sessionId === 'string' ? route.params.sessionId : null
-  const targetId = sessionId && filteredIds.value.has(sessionId)
-    ? sessionId
-    : store.filteredSessions[0]?.id ?? null
+  const targetId =
+    sessionId && filteredIds.value.has(sessionId)
+      ? sessionId
+      : (store.filteredSessions[0]?.id ?? null)
 
   store.setSelectedId(targetId)
 
@@ -35,9 +36,9 @@ function syncRouteSelection() {
   }
 
   if (targetId !== sessionId) {
-    router.replace(targetId
-      ? { name: 'sessions', params: { sessionId: targetId } }
-      : { name: 'sessions' })
+    router.replace(
+      targetId ? { name: 'sessions', params: { sessionId: targetId } } : { name: 'sessions' },
+    )
   }
 }
 
@@ -46,15 +47,22 @@ onMounted(async () => {
   syncRouteSelection()
 })
 
-watch([() => route.params.sessionId, filteredIds, () => store.isLoadingSessions], () => {
-  syncRouteSelection()
-}, { immediate: true })
+watch(
+  [() => route.params.sessionId, filteredIds, () => store.isLoadingSessions],
+  () => {
+    syncRouteSelection()
+  },
+  { immediate: true },
+)
 
-watch(() => store.selectedId, (sessionId) => {
-  if (sessionId) {
-    void store.loadSession(sessionId)
-  }
-})
+watch(
+  () => store.selectedId,
+  (sessionId) => {
+    if (sessionId) {
+      void store.loadSession(sessionId)
+    }
+  },
+)
 
 function openSession(id: string) {
   store.setSelectedId(id)
@@ -78,7 +86,10 @@ function openSession(id: string) {
       @update:sort="store.setSort"
     />
 
-    <div v-if="store.loadError" class="border-b border-amber-500/20 bg-amber-500/8 px-5 py-2 text-xs text-amber-100">
+    <div
+      v-if="store.loadError"
+      class="border-b border-amber-500/20 bg-amber-500/8 px-5 py-2 text-xs text-amber-100"
+    >
       {{ store.loadError }}
     </div>
 

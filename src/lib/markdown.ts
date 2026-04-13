@@ -20,8 +20,7 @@ const markdown = createMarkdownItAsync({
         lang: lang || 'text',
         theme: 'github-dark',
       })
-    }
-    catch {
+    } catch {
       return await codeToHtml(code, {
         lang: 'text',
         theme: 'github-dark',

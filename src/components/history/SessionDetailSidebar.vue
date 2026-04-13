@@ -3,20 +3,20 @@
   不负责：消息流渲染。
 -->
 <script setup lang="ts">
-import { ItemGroup, Item, ItemTitle, ItemContent } from "@/components/ui/item";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import type { SessionDetail, SessionMessage } from "@/types/history";
+import { ItemGroup, Item, ItemTitle, ItemContent } from '@/components/ui/item'
+import { Avatar, AvatarFallback } from '@/components/ui/avatar'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { ScrollArea } from '@/components/ui/scroll-area'
+import type { SessionDetail, SessionMessage } from '@/types/history'
 
 defineProps<{
-  navigationItems: SessionMessage[];
-  session: SessionDetail;
-}>();
+  navigationItems: SessionMessage[]
+  session: SessionDetail
+}>()
 
 const emits = defineEmits<{
-  (event: "jump", messageId: string): void;
-}>();
+  (event: 'jump', messageId: string): void
+}>()
 </script>
 
 <template>

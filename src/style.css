@@ -96,7 +96,11 @@ body {
   margin: 0;
   font-family: var(--font-sans);
   background:
-    radial-gradient(circle at top, color-mix(in oklab, var(--primary) 9%, transparent), transparent 34%),
+    radial-gradient(
+      circle at top,
+      color-mix(in oklab, var(--primary) 9%, transparent),
+      transparent 34%
+    ),
     var(--background);
 }
 

@@ -132,8 +132,7 @@ function truncate(value: string, max = 120) {
 function parseJsonSafe<T>(raw: string) {
   try {
     return JSON.parse(raw) as T
-  }
-  catch {
+  } catch {
     return null
   }
 }
@@ -164,12 +163,14 @@ function buildGroupLabel(platform: string, chatType: string) {
 function buildShortName(name: string) {
   const clean = normalizeText(name)
   if (!clean) return '??'
-  return clean
-    .split(/[\s/_-]+/)
-    .map(part => part[0])
-    .join('')
-    .slice(0, 2)
-    .toUpperCase() || clean.slice(0, 2).toUpperCase()
+  return (
+    clean
+      .split(/[\s/_-]+/)
+      .map((part) => part[0])
+      .join('')
+      .slice(0, 2)
+      .toUpperCase() || clean.slice(0, 2).toUpperCase()
+  )
 }
 
 function humanizeToolName(name: string | undefined) {
@@ -187,10 +188,17 @@ function dedupeKey(summary: SessionSummary) {
   return [summary.platform, channelPart, normalizeText(summary.title).toLowerCase()].join('::')
 }
 
-function deriveTitle(indexEntry: HermesIndexEntry | undefined, webuiEntry: WebUiSessionFile | undefined, sessionFile: HermesSessionFile) {
+function deriveTitle(
+  indexEntry: HermesIndexEntry | undefined,
+  webuiEntry: WebUiSessionFile | undefined,
+  sessionFile: HermesSessionFile,
+) {
   const displayName = normalizeText(indexEntry?.display_name)
   if (displayName) {
-    const parts = displayName.split(' / ').map(part => part.trim()).filter(Boolean)
+    const parts = displayName
+      .split(' / ')
+      .map((part) => part.trim())
+      .filter(Boolean)
     return parts.at(-1) || displayName
   }
 
@@ -199,7 +207,9 @@ function deriveTitle(indexEntry: HermesIndexEntry | undefined, webuiEntry: WebUi
     return webTitle
   }
 
-  const firstUser = sessionFile.messages?.find(message => message.role === 'user' && normalizeText(message.content))
+  const firstUser = sessionFile.messages?.find(
+    (message) => message.role === 'user' && normalizeText(message.content),
+  )
   if (firstUser?.content) {
     return truncate(normalizeText(firstUser.content), 72)
   }
@@ -213,7 +223,10 @@ function deriveChannel(indexEntry: HermesIndexEntry | undefined) {
     return '未知会话来源'
   }
 
-  const parts = displayName.split(' / ').map(part => part.trim()).filter(Boolean)
+  const parts = displayName
+    .split(' / ')
+    .map((part) => part.trim())
+    .filter(Boolean)
   return parts.length > 1 ? parts.slice(0, -1).join(' / ') : displayName
 }
 
@@ -283,8 +296,7 @@ async function fileExists(filePath: string) {
   try {
     await fs.access(filePath)
     return true
-  }
-  catch {
+  } catch {
     return false
   }
 }
@@ -293,14 +305,13 @@ async function readJsonFile<T>(filePath: string): Promise<T | null> {
   try {
     const raw = await fs.readFile(filePath, 'utf8')
     return JSON.parse(raw) as T
-  }
-  catch {
+  } catch {
     return null
   }
 }
 
 async function loadIndexMap() {
-  return await readJsonFile<Record<string, HermesIndexEntry>>(INDEX_FILE) || {}
+  return (await readJsonFile<Record<string, HermesIndexEntry>>(INDEX_FILE)) || {}
 }
 
 async function loadWebUiMap() {
@@ -309,8 +320,7 @@ async function loadWebUiMap() {
 
   try {
     files = await fs.readdir(WEBUI_SESSIONS_DIR)
-  }
-  catch {
+  } catch {
     return map
   }
 
@@ -327,17 +337,34 @@ async function loadWebUiMap() {
 
 async function listSessionFiles() {
   const files = await fs.readdir(SESSIONS_DIR)
-  return files.filter(file => /^session_.+\.json$/u.test(file)).sort().reverse()
+  return files
+    .filter((file) => /^session_.+\.json$/u.test(file))
+    .sort()
+    .reverse()
 }
 
-function summarizeSession(sessionFile: HermesSessionFile, indexEntry: HermesIndexEntry | undefined, webuiEntry: WebUiSessionFile | undefined): SessionSummary {
+function summarizeSession(
+  sessionFile: HermesSessionFile,
+  indexEntry: HermesIndexEntry | undefined,
+  webuiEntry: WebUiSessionFile | undefined,
+): SessionSummary {
   const messages = sessionFile.messages || []
   const roles = deriveAvailableRoles(messages)
-  const toolMessages = messages.filter(message => message.role === 'tool' && normalizeText(message.content))
+  const toolMessages = messages.filter(
+    (message) => message.role === 'tool' && normalizeText(message.content),
+  )
   const platform = normalizeText(sessionFile.platform || indexEntry?.platform) || 'unknown'
-  const chatType = normalizeText(indexEntry?.chat_type || indexEntry?.origin?.chat_type) || (platform === 'cli' ? 'cli' : 'unknown')
-  const createdAt = webuiEntry?.created_at || indexEntry?.created_at || sessionFile.session_start || sessionFile.last_updated || new Date().toISOString()
-  const updatedAt = webuiEntry?.updated_at || indexEntry?.updated_at || sessionFile.last_updated || createdAt
+  const chatType =
+    normalizeText(indexEntry?.chat_type || indexEntry?.origin?.chat_type) ||
+    (platform === 'cli' ? 'cli' : 'unknown')
+  const createdAt =
+    webuiEntry?.created_at ||
+    indexEntry?.created_at ||
+    sessionFile.session_start ||
+    sessionFile.last_updated ||
+    new Date().toISOString()
+  const updatedAt =
+    webuiEntry?.updated_at || indexEntry?.updated_at || sessionFile.last_updated || createdAt
 
   let issueCount = 0
   for (const message of toolMessages) {
@@ -349,15 +376,18 @@ function summarizeSession(sessionFile: HermesSessionFile, indexEntry: HermesInde
   let status: SessionStatus = 'archived'
   if (webuiEntry?.archived === true || indexEntry?.suspended === true) {
     status = 'archived'
-  }
-  else if (issueCount > 0) {
+  } else if (issueCount > 0) {
     status = 'attention'
-  }
-  else if (indexEntry?.session_id) {
+  } else if (indexEntry?.session_id) {
     status = 'active'
   }
 
-  const tags = [platform, chatType, issueCount > 0 ? 'tool-error' : '', webuiEntry?.pinned ? 'pinned' : ''].filter(Boolean)
+  const tags = [
+    platform,
+    chatType,
+    issueCount > 0 ? 'tool-error' : '',
+    webuiEntry?.pinned ? 'pinned' : '',
+  ].filter(Boolean)
 
   return {
     id: sessionFile.session_id,
@@ -390,7 +420,11 @@ export async function loadSessionSummaries() {
     return listCache.sessions
   }
 
-  const [indexMap, webuiMap, sessionFiles] = await Promise.all([loadIndexMap(), loadWebUiMap(), listSessionFiles()])
+  const [indexMap, webuiMap, sessionFiles] = await Promise.all([
+    loadIndexMap(),
+    loadWebUiMap(),
+    listSessionFiles(),
+  ])
   const indexBySessionId = new Map<string, HermesIndexEntry>()
 
   for (const entry of Object.values(indexMap)) {
@@ -403,7 +437,11 @@ export async function loadSessionSummaries() {
   for (const file of sessionFiles) {
     const sessionFile = await readJsonFile<HermesSessionFile>(path.join(SESSIONS_DIR, file))
     if (!sessionFile?.session_id) continue
-    const summary = summarizeSession(sessionFile, indexBySessionId.get(sessionFile.session_id), webuiMap.get(sessionFile.session_id))
+    const summary = summarizeSession(
+      sessionFile,
+      indexBySessionId.get(sessionFile.session_id),
+      webuiMap.get(sessionFile.session_id),
+    )
     const key = dedupeKey(summary)
     const existing = deduped.get(key)
     if (!existing || +new Date(summary.updatedAt) > +new Date(existing.updatedAt)) {
@@ -411,7 +449,9 @@ export async function loadSessionSummaries() {
     }
   }
 
-  const sessions = Array.from(deduped.values()).sort((left, right) => +new Date(right.updatedAt) - +new Date(left.updatedAt))
+  const sessions = Array.from(deduped.values()).sort(
+    (left, right) => +new Date(right.updatedAt) - +new Date(left.updatedAt),
+  )
   listCache = { loadedAt: Date.now(), sessions }
   return sessions
 }
@@ -453,7 +493,13 @@ function deriveCommandOutput(parsed: Record<string, unknown> | null) {
   return segments.join('\n\n').trim()
 }
 
-function buildToolCallEntry(sessionId: string, index: number, content: string, meta?: ToolCallMeta, toolCallId?: string): ToolCallEntry {
+function buildToolCallEntry(
+  sessionId: string,
+  index: number,
+  content: string,
+  meta?: ToolCallMeta,
+  toolCallId?: string,
+): ToolCallEntry {
   const parsed = parseJsonSafe<Record<string, unknown>>(content)
   const rawJson = parsed ? JSON.stringify(parsed, null, 2) : content
   const commandOutput = deriveCommandOutput(parsed)
@@ -473,15 +519,20 @@ function buildToolCallEntry(sessionId: string, index: number, content: string, m
   }
 }
 
-function buildToolGroupMessage(sessionId: string, startIndex: number, timestamp: string, toolCalls: ToolCallEntry[]): SessionMessage {
+function buildToolGroupMessage(
+  sessionId: string,
+  startIndex: number,
+  timestamp: string,
+  toolCalls: ToolCallEntry[],
+): SessionMessage {
   return {
     id: `${sessionId}-tool-group-${startIndex}`,
     role: 'tool',
     author: `${toolCalls.length} 次工具调用`,
     timestamp,
     content: '',
-    preview: truncate(toolCalls.map(call => `${call.title}: ${call.preview}`).join(' · '), 180),
-    hasError: toolCalls.some(call => Boolean(call.hasError)),
+    preview: truncate(toolCalls.map((call) => `${call.title}: ${call.preview}`).join(' · '), 180),
+    hasError: toolCalls.some((call) => Boolean(call.hasError)),
     collapsedByDefault: true,
     toolCalls,
   }
@@ -489,7 +540,7 @@ function buildToolGroupMessage(sessionId: string, startIndex: number, timestamp:
 
 export async function loadSessionDetail(sessionId: string): Promise<SessionDetail | null> {
   const summaries = await loadSessionSummaries()
-  const summary = summaries.find(item => item.id === sessionId)
+  const summary = summaries.find((item) => item.id === sessionId)
   if (!summary) {
     return null
   }
@@ -506,7 +557,10 @@ export async function loadSessionDetail(sessionId: string): Promise<SessionDetai
 
   if (await fileExists(jsonlFile)) {
     const raw = await fs.readFile(jsonlFile, 'utf8')
-    const lines = raw.split('\n').map(line => line.trim()).filter(Boolean)
+    const lines = raw
+      .split('\n')
+      .map((line) => line.trim())
+      .filter(Boolean)
     const toolBuffer: ToolCallEntry[] = []
     let toolBufferIndex = 0
     let toolBufferTimestamp = summary.updatedAt
@@ -520,8 +574,16 @@ export async function loadSessionDetail(sessionId: string): Promise<SessionDetai
 
       if (role === 'assistant' && Array.isArray(record.tool_calls)) {
         for (const toolCall of record.tool_calls as Array<Record<string, unknown>>) {
-          const id = typeof toolCall.call_id === 'string' ? toolCall.call_id : typeof toolCall.id === 'string' ? toolCall.id : null
-          const functionMeta = typeof toolCall.function === 'object' && toolCall.function ? toolCall.function as Record<string, unknown> : null
+          const id =
+            typeof toolCall.call_id === 'string'
+              ? toolCall.call_id
+              : typeof toolCall.id === 'string'
+                ? toolCall.id
+                : null
+          const functionMeta =
+            typeof toolCall.function === 'object' && toolCall.function
+              ? (toolCall.function as Record<string, unknown>)
+              : null
           if (!id || !functionMeta) continue
           toolCallMeta.set(id, {
             name: typeof functionMeta.name === 'string' ? functionMeta.name : 'tool',
@@ -536,7 +598,12 @@ export async function loadSessionDetail(sessionId: string): Promise<SessionDetai
       const content = typeof record.content === 'string' ? record.content : ''
       const normalizedContent = normalizeText(content)
 
-      if ((normalizedRole === 'assistant' || normalizedRole === 'user' || normalizedRole === 'system') && !normalizedContent) {
+      if (
+        (normalizedRole === 'assistant' ||
+          normalizedRole === 'user' ||
+          normalizedRole === 'system') &&
+        !normalizedContent
+      ) {
         continue
       }
 
@@ -555,7 +622,12 @@ export async function loadSessionDetail(sessionId: string): Promise<SessionDetai
       messages.push({
         id: `${sessionId}-${normalizedRole}-${index}`,
         role: normalizedRole,
-        author: normalizedRole === 'assistant' ? 'Hermes' : normalizedRole === 'user' ? summary.participants[0]?.name || 'User' : 'System',
+        author:
+          normalizedRole === 'assistant'
+            ? 'Hermes'
+            : normalizedRole === 'user'
+              ? summary.participants[0]?.name || 'User'
+              : 'System',
         timestamp,
         content,
         preview: truncate(normalizedContent, 140),
@@ -566,13 +638,17 @@ export async function loadSessionDetail(sessionId: string): Promise<SessionDetai
   }
 
   if (!messages.length) {
-    const sessionFile = await readJsonFile<HermesSessionFile>(path.join(SESSIONS_DIR, `session_${sessionId}.json`))
+    const sessionFile = await readJsonFile<HermesSessionFile>(
+      path.join(SESSIONS_DIR, `session_${sessionId}.json`),
+    )
     const toolBuffer: ToolCallEntry[] = []
     let toolBufferIndex = 0
 
     const flushFallbackToolBuffer = () => {
       if (!toolBuffer.length) return
-      messages.push(buildToolGroupMessage(sessionId, toolBufferIndex, summary.updatedAt, [...toolBuffer]))
+      messages.push(
+        buildToolGroupMessage(sessionId, toolBufferIndex, summary.updatedAt, [...toolBuffer]),
+      )
       toolBuffer.length = 0
     }
 
@@ -580,13 +656,19 @@ export async function loadSessionDetail(sessionId: string): Promise<SessionDetai
       if (!isMessageRole(message.role)) continue
       const content = message.content || ''
       const normalizedContent = normalizeText(content)
-      if ((message.role === 'assistant' || message.role === 'user' || message.role === 'system') && !normalizedContent) continue
+      if (
+        (message.role === 'assistant' || message.role === 'user' || message.role === 'system') &&
+        !normalizedContent
+      )
+        continue
 
       if (message.role === 'tool') {
         if (!toolBuffer.length) {
           toolBufferIndex = index
         }
-        toolBuffer.push(buildToolCallEntry(sessionId, index, content, { name: 'tool', arguments: '' }))
+        toolBuffer.push(
+          buildToolCallEntry(sessionId, index, content, { name: 'tool', arguments: '' }),
+        )
         continue
       }
 
@@ -594,7 +676,12 @@ export async function loadSessionDetail(sessionId: string): Promise<SessionDetai
       messages.push({
         id: `${sessionId}-${message.role}-${index}`,
         role: message.role,
-        author: message.role === 'assistant' ? 'Hermes' : message.role === 'user' ? summary.participants[0]?.name || 'User' : 'System',
+        author:
+          message.role === 'assistant'
+            ? 'Hermes'
+            : message.role === 'user'
+              ? summary.participants[0]?.name || 'User'
+              : 'System',
         timestamp: summary.updatedAt,
         content,
         preview: truncate(normalizedContent, 140),

@@ -8,7 +8,11 @@ import { computed, nextTick } from 'vue'
 import SessionDetailHeader from '@/components/history/SessionDetailHeader.vue'
 import SessionDetailSidebar from '@/components/history/SessionDetailSidebar.vue'
 import SessionMessageStream from '@/components/history/SessionMessageStream.vue'
-import type { MessageRole, MessageRoleFilter, SessionDetail as SessionDetailModel } from '@/types/history'
+import type {
+  MessageRole,
+  MessageRoleFilter,
+  SessionDetail as SessionDetailModel,
+} from '@/types/history'
 
 const props = defineProps<{
   availableRoles: MessageRole[]
@@ -21,9 +25,15 @@ const emits = defineEmits<{
   (event: 'update:message-role-filter', value: MessageRoleFilter): void
 }>()
 
-const updatedLabel = computed(() => props.session ? useDateFormat(props.session.updatedAt, 'YYYY-MM-DD HH:mm').value : '')
-const createdLabel = computed(() => props.session ? useDateFormat(props.session.createdAt, 'YYYY-MM-DD HH:mm').value : '')
-const userNavigationItems = computed(() => props.session?.messages.filter(message => message.role === 'user') || [])
+const updatedLabel = computed(() =>
+  props.session ? useDateFormat(props.session.updatedAt, 'YYYY-MM-DD HH:mm').value : '',
+)
+const createdLabel = computed(() =>
+  props.session ? useDateFormat(props.session.createdAt, 'YYYY-MM-DD HH:mm').value : '',
+)
+const userNavigationItems = computed(
+  () => props.session?.messages.filter((message) => message.role === 'user') || [],
+)
 
 async function jumpToMessage(messageId: string) {
   await nextTick()
@@ -33,7 +43,10 @@ async function jumpToMessage(messageId: string) {
 
 <template>
   <section class="flex min-h-0 flex-col bg-background">
-    <div v-if="isLoading" class="flex h-full items-center justify-center p-8 text-sm text-muted-foreground">
+    <div
+      v-if="isLoading"
+      class="flex h-full items-center justify-center p-8 text-sm text-muted-foreground"
+    >
       正在读取会话详情…
     </div>
 
@@ -44,7 +57,9 @@ async function jumpToMessage(messageId: string) {
         :updated-label="updatedLabel"
       />
 
-      <div class="grid min-h-0 flex-1 gap-3 overflow-hidden p-3 lg:grid-cols-[minmax(0,1fr)_220px] lg:p-4">
+      <div
+        class="grid min-h-0 flex-1 gap-3 overflow-hidden p-3 lg:grid-cols-[minmax(0,1fr)_220px] lg:p-4"
+      >
         <SessionMessageStream
           :available-roles="availableRoles"
           :message-role-filter="messageRoleFilter"
