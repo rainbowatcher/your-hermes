@@ -90,7 +90,7 @@ function setToolViewMode(messageId: string, toolCall: ToolCallEntry, mode: ToolM
 function toolViewMode(messageId: string, toolCall: ToolCallEntry) {
   return (
     toolViewModes.value[toolViewKey(messageId, toolCall.id)] ||
-    (toolCall.commandOutput ? 'output' : 'raw')
+    (toolCall.primaryContent ? 'output' : 'raw')
   )
 }
 
@@ -98,7 +98,7 @@ function toolContent(messageId: string, toolCall: ToolCallEntry) {
   if (toolViewMode(messageId, toolCall) === 'raw') {
     return toolCall.rawJson
   }
-  return toolCall.commandOutput || toolCall.rawJson
+  return toolCall.primaryContent || toolCall.rawJson
 }
 
 function textViewMode(message: SessionMessage) {
@@ -233,8 +233,8 @@ function roleIcon(role: MessageRole) {
                                 : 'ghost'
                             "
                             size="icon-xs"
-                            :disabled="!toolCall.commandOutput"
-                            title="显示 output"
+                            :disabled="!toolCall.primaryContent"
+                            :title="toolCall.kind === 'skill' ? '显示技能内容' : '显示工具输出'"
                             @click.stop="setToolViewMode(message.id, toolCall, 'output')"
                           >
                             <TerminalSquare class="size-3" />

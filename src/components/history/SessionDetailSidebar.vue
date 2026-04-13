@@ -53,6 +53,19 @@ const emits = defineEmits<{
 
     <Card class="border-border/70 bg-card/60 py-0">
       <CardHeader class="px-3 py-2">
+        <CardTitle class="text-xs font-medium">会话文件</CardTitle>
+      </CardHeader>
+      <CardContent class="px-3 pb-3">
+        <p
+          class="break-all rounded-md border border-border/60 bg-muted/20 px-2.5 py-2 font-mono text-[10px] text-muted-foreground"
+        >
+          {{ session.sessionFilePath }}
+        </p>
+      </CardContent>
+    </Card>
+
+    <Card class="border-border/70 bg-card/60 py-0">
+      <CardHeader class="px-3 py-2">
         <CardTitle class="text-xs font-medium">参与者</CardTitle>
       </CardHeader>
       <CardContent class="space-y-2 px-3 pb-3">

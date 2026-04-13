@@ -15,13 +15,16 @@ export interface SessionParticipant {
   accent?: string
 }
 
+export type ToolCallKind = 'tool' | 'skill'
+
 export interface ToolCallEntry {
   id: string
   title: string
   name: string
+  kind: ToolCallKind
   preview: string
   rawJson: string
-  commandOutput: string
+  primaryContent: string
   toolArguments?: string
   toolCallId?: string
   hasError?: boolean
@@ -44,6 +47,7 @@ export interface SessionSummary {
   title: string
   workspace: string
   channel: string
+  sessionFilePath: string
   status: SessionStatus
   summary: string
   tags: string[]
