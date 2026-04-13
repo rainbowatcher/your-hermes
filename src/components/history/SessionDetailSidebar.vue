@@ -7,20 +7,59 @@ import { ItemGroup, Item, ItemTitle, ItemContent } from '@/components/ui/item'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import type { SessionDetail, SessionMessage } from '@/types/history'
+import type { SessionBranchSummary, SessionDetail, SessionMessage } from '@/types/history'
 
 defineProps<{
   navigationItems: SessionMessage[]
+  selectedSessionId: string
   session: SessionDetail
 }>()
 
 const emits = defineEmits<{
   (event: 'jump', messageId: string): void
+  (event: 'open-branch', branchId: string): void
 }>()
+
+function branchMeta(branch: SessionBranchSummary) {
+  return `${branch.branchLabel} · ${branch.messageCount} 条消息`
+}
 </script>
 
 <template>
   <div class="grid min-h-0 content-start gap-3">
+    <Card v-if="session.branches.length > 0" class="border-border/70 bg-card/60 py-0">
+      <CardHeader class="px-3 py-2">
+        <CardTitle class="text-xs font-medium">分支</CardTitle>
+      </CardHeader>
+      <CardContent class="px-2 pb-2">
+        <ItemGroup class="gap-1">
+          <Item
+            v-for="branch in session.branches"
+            :key="branch.id"
+            :class="[
+              'cursor-pointer rounded-md border px-2.5 py-2 text-left transition-colors',
+              selectedSessionId === branch.id
+                ? 'border-primary/40 bg-primary/10 text-foreground'
+                : 'border-border/60 bg-muted/20 text-muted-foreground hover:bg-muted/30 hover:text-foreground',
+            ]"
+            @click="emits('open-branch', branch.id)"
+          >
+            <ItemContent>
+              <ItemTitle class="truncate text-[11px] font-medium text-current">
+                {{ branch.branchLabel }}
+              </ItemTitle>
+              <p class="mt-1 line-clamp-2 text-[10px] text-current/75">
+                {{ branch.summary || branch.title }}
+              </p>
+              <p class="mt-1 font-mono text-[10px] text-current/70">
+                {{ branchMeta(branch) }}
+              </p>
+            </ItemContent>
+          </Item>
+        </ItemGroup>
+      </CardContent>
+    </Card>
+
     <Card class="min-h-0 border-border/70">
       <CardHeader>
         <CardTitle class="text-xs font-medium">消息导航</CardTitle>

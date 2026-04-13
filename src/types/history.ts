@@ -7,6 +7,13 @@ export type SessionStatusFilter = 'all' | SessionStatus
 export type MessageRole = 'user' | 'assistant' | 'system' | 'tool'
 export type MessageRoleFilter = 'all' | MessageRole
 export type ToolMessageViewMode = 'output' | 'raw'
+export type SessionRelationKind = 'root' | 'branch' | 'duplicate'
+export type SessionBranchKind =
+  | 'skill-review'
+  | 'memory-review'
+  | 'combined-review'
+  | 'compression'
+  | 'unknown'
 
 export interface SessionParticipant {
   id: string
@@ -66,10 +73,29 @@ export interface SessionSummary {
   issueCount: number
   toolMessageCount: number
   availableRoles: MessageRole[]
+  relationKind: SessionRelationKind
+  rootSessionId: string
+  hiddenFromList: boolean
+  branchKind?: SessionBranchKind
+  branchLabel?: string
+  branchCount: number
+}
+
+export interface SessionBranchSummary {
+  id: string
+  title: string
+  summary: string
+  createdAt: string
+  updatedAt: string
+  messageCount: number
+  branchKind: SessionBranchKind
+  branchLabel: string
+  rootSessionId: string
 }
 
 export interface SessionDetail extends SessionSummary {
   messages: SessionMessage[]
+  branches: SessionBranchSummary[]
 }
 
 export type SessionRecord = SessionDetail

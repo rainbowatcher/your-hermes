@@ -3,7 +3,7 @@
   不负责：服务端文件解析与消息发送。
 -->
 <script setup lang="ts">
-import { computed, onMounted, watch } from 'vue'
+import { onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import HistoryToolbar from '@/components/history/HistoryToolbar.vue'
 import SessionDetail from '@/components/history/SessionDetail.vue'
@@ -16,18 +16,13 @@ const theme = useThemeStore()
 const route = useRoute()
 const router = useRouter()
 
-const filteredIds = computed(() => new Set(store.filteredSessions.map((session) => session.id)))
-
 function syncRouteSelection() {
   if (store.isLoadingSessions) {
     return
   }
 
   const sessionId = typeof route.params.sessionId === 'string' ? route.params.sessionId : null
-  const targetId =
-    sessionId && filteredIds.value.has(sessionId)
-      ? sessionId
-      : (store.filteredSessions[0]?.id ?? null)
+  const targetId = sessionId || store.filteredSessions[0]?.id || null
 
   store.setSelectedId(targetId)
 
@@ -35,10 +30,8 @@ function syncRouteSelection() {
     void store.loadSession(targetId)
   }
 
-  if (targetId !== sessionId) {
-    router.replace(
-      targetId ? { name: 'sessions', params: { sessionId: targetId } } : { name: 'sessions' },
-    )
+  if (!sessionId && targetId) {
+    router.replace({ name: 'sessions', params: { sessionId: targetId } })
   }
 }
 
@@ -48,7 +41,11 @@ onMounted(async () => {
 })
 
 watch(
-  [() => route.params.sessionId, filteredIds, () => store.isLoadingSessions],
+  [
+    () => route.params.sessionId,
+    () => store.filteredSessions.length,
+    () => store.isLoadingSessions,
+  ],
   () => {
     syncRouteSelection()
   },
@@ -107,6 +104,7 @@ function openSession(id: string) {
         :is-loading="store.isLoadingDetail"
         :message-role-filter="store.messageRoleFilter"
         :session="store.selectedSession"
+        @open-branch="openSession"
         @update:message-role-filter="store.setMessageRoleFilter"
       />
     </div>

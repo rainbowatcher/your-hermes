@@ -12,6 +12,12 @@ const WEBUI_SESSIONS_DIR = path.join(HERMES_HOME, 'webui', 'sessions')
 const INDEX_FILE = path.join(SESSIONS_DIR, 'sessions.json')
 const CACHE_TTL_MS = 3_000
 
+const SKILL_REVIEW_PROMPT =
+  'Review the conversation above and consider saving or updating a skill if appropriate.'
+const MEMORY_REVIEW_PROMPT =
+  'Review the conversation above and consider saving to memory if appropriate.'
+const COMBINED_REVIEW_PROMPT = 'Review the conversation above and consider two things:'
+
 export type SessionStatus = 'active' | 'attention' | 'archived'
 export type MessageRole = 'user' | 'assistant' | 'system' | 'tool'
 
@@ -32,6 +38,11 @@ interface HermesIndexEntry {
   }
 }
 
+interface RawHermesMessage {
+  role?: string
+  content?: string | null
+}
+
 interface HermesSessionFile {
   session_id: string
   model?: string
@@ -39,10 +50,7 @@ interface HermesSessionFile {
   session_start?: string
   last_updated?: string
   message_count?: number
-  messages?: Array<{
-    role?: string
-    content?: string | null
-  }>
+  messages?: RawHermesMessage[]
 }
 
 interface WebUiSessionFile {
@@ -67,6 +75,13 @@ export interface SessionParticipant {
 }
 
 export type ToolCallKind = 'tool' | 'skill'
+export type SessionRelationKind = 'root' | 'branch' | 'duplicate'
+export type SessionBranchKind =
+  | 'skill-review'
+  | 'memory-review'
+  | 'combined-review'
+  | 'compression'
+  | 'unknown'
 
 export interface ToolCallEntry {
   id: string
@@ -117,13 +132,52 @@ export interface SessionSummary {
   issueCount: number
   toolMessageCount: number
   availableRoles: MessageRole[]
+  relationKind: SessionRelationKind
+  rootSessionId: string
+  hiddenFromList: boolean
+  branchKind?: SessionBranchKind
+  branchLabel?: string
+  branchCount: number
+}
+
+export interface SessionBranchSummary {
+  id: string
+  title: string
+  summary: string
+  createdAt: string
+  updatedAt: string
+  messageCount: number
+  branchKind: SessionBranchKind
+  branchLabel: string
+  rootSessionId: string
 }
 
 export interface SessionDetail extends SessionSummary {
   messages: SessionMessage[]
+  branches: SessionBranchSummary[]
 }
 
-let listCache: { loadedAt: number; sessions: SessionSummary[] } | null = null
+interface SessionCandidate {
+  summary: SessionSummary
+  rawMessages: RawHermesMessage[]
+  messageKeys: string[]
+  hasIndex: boolean
+  hasJsonl: boolean
+}
+
+interface SessionFamily {
+  root: SessionCandidate
+  branches: Array<{ candidate: SessionCandidate; branchKind: SessionBranchKind }>
+  duplicates: SessionCandidate[]
+}
+
+interface SessionGraph {
+  sessions: SessionSummary[]
+  summariesById: Map<string, SessionSummary>
+  branchesByRootId: Map<string, SessionBranchSummary[]>
+}
+
+let listCache: { loadedAt: number; graph: SessionGraph } | null = null
 
 function normalizeText(value: string | null | undefined) {
   return (value || '').replace(/\s+/g, ' ').trim()
@@ -186,10 +240,9 @@ function humanizeToolName(name: string | undefined) {
     .toLowerCase()
 }
 
-function dedupeKey(summary: SessionSummary) {
-  const normalizedChannel = normalizeText(summary.channel).toLowerCase()
-  const channelPart = normalizedChannel === '未知会话来源' ? 'unknown-channel' : normalizedChannel
-  return [summary.platform, channelPart, normalizeText(summary.title).toLowerCase()].join('::')
+function coarseFamilyKey(summary: SessionSummary, firstUserMessage: string) {
+  const firstUserPart = firstUserMessage || normalizeText(summary.title).toLowerCase()
+  return [summary.platform, firstUserPart].join('::')
 }
 
 function deriveTitle(
@@ -417,12 +470,137 @@ function summarizeSession(
     issueCount,
     toolMessageCount: toolMessages.length,
     availableRoles: roles,
+    relationKind: 'root',
+    rootSessionId: sessionFile.session_id,
+    hiddenFromList: false,
+    branchCount: 0,
   }
 }
 
-export async function loadSessionSummaries() {
+function buildMessageKey(message: RawHermesMessage) {
+  const role = typeof message.role === 'string' ? message.role : 'unknown'
+  const content = normalizeText(message.content)
+  return content ? `${role}:${content}` : ''
+}
+
+function firstUserMessage(messages: RawHermesMessage[]) {
+  for (const message of messages) {
+    if (message.role !== 'user') continue
+    const content = normalizeText(message.content)
+    if (content) {
+      return content.toLowerCase()
+    }
+  }
+  return ''
+}
+
+function toComparableMessages(messages: RawHermesMessage[]) {
+  return messages.map(buildMessageKey).filter(Boolean)
+}
+
+function sessionPriority(candidate: SessionCandidate) {
+  return [
+    candidate.hasIndex ? 1 : 0,
+    candidate.hasJsonl ? 1 : 0,
+    candidate.summary.messageCount,
+    candidate.summary.toolMessageCount,
+    +new Date(candidate.summary.updatedAt),
+  ]
+}
+
+function comparePriority(left: SessionCandidate, right: SessionCandidate) {
+  const leftPriority = sessionPriority(left)
+  const rightPriority = sessionPriority(right)
+  for (let index = 0; index < leftPriority.length; index += 1) {
+    const delta = rightPriority[index] - leftPriority[index]
+    if (delta !== 0) {
+      return delta
+    }
+  }
+  return right.summary.id.localeCompare(left.summary.id)
+}
+
+function commonPrefixLength(left: string[], right: string[]) {
+  const max = Math.min(left.length, right.length)
+  let index = 0
+  while (index < max && left[index] === right[index]) {
+    index += 1
+  }
+  return index
+}
+
+function branchKindLabel(branchKind: SessionBranchKind) {
+  if (branchKind === 'skill-review') return 'skill 提炼'
+  if (branchKind === 'memory-review') return 'memory 提炼'
+  if (branchKind === 'combined-review') return 'memory / skill 提炼'
+  if (branchKind === 'compression') return '压缩续写'
+  return '派生分支'
+}
+
+function detectReviewBranchKindFromKey(messageKey: string | undefined): SessionBranchKind | null {
+  if (!messageKey || !messageKey.startsWith('user:')) {
+    return null
+  }
+
+  const content = messageKey.slice('user:'.length)
+  if (!content) {
+    return null
+  }
+
+  if (content.startsWith(SKILL_REVIEW_PROMPT)) {
+    return 'skill-review'
+  }
+  if (content.startsWith(MEMORY_REVIEW_PROMPT)) {
+    return 'memory-review'
+  }
+  if (content.startsWith(COMBINED_REVIEW_PROMPT)) {
+    return 'combined-review'
+  }
+  return null
+}
+
+function classifyRelation(
+  root: SessionCandidate,
+  candidate: SessionCandidate,
+): { type: SessionRelationKind; branchKind?: SessionBranchKind } | null {
+  const shorterLength = Math.min(root.messageKeys.length, candidate.messageKeys.length)
+  if (shorterLength < 4) {
+    return null
+  }
+
+  const prefixLength = commonPrefixLength(root.messageKeys, candidate.messageKeys)
+  const prefixRatio = prefixLength / shorterLength
+  const divergenceKey = candidate.messageKeys[prefixLength]
+  const reviewBranchKind = detectReviewBranchKindFromKey(divergenceKey)
+
+  if (reviewBranchKind && prefixLength >= 20 && prefixRatio >= 0.8) {
+    return { type: 'branch', branchKind: reviewBranchKind }
+  }
+
+  if (prefixRatio >= 0.95 && prefixLength >= shorterLength - 1) {
+    return { type: 'duplicate' }
+  }
+
+  return null
+}
+
+function buildBranchSummary(summary: SessionSummary): SessionBranchSummary {
+  return {
+    id: summary.id,
+    title: summary.title,
+    summary: summary.summary,
+    createdAt: summary.createdAt,
+    updatedAt: summary.updatedAt,
+    messageCount: summary.messageCount,
+    branchKind: summary.branchKind || 'unknown',
+    branchLabel: summary.branchLabel || branchKindLabel(summary.branchKind || 'unknown'),
+    rootSessionId: summary.rootSessionId,
+  }
+}
+
+async function loadSessionGraph(): Promise<SessionGraph> {
   if (listCache && Date.now() - listCache.loadedAt < CACHE_TTL_MS) {
-    return listCache.sessions
+    return listCache.graph
   }
 
   const [indexMap, webuiMap, sessionFiles] = await Promise.all([
@@ -438,27 +616,108 @@ export async function loadSessionSummaries() {
     }
   }
 
-  const deduped = new Map<string, SessionSummary>()
+  const familyBuckets = new Map<string, SessionCandidate[]>()
+
   for (const file of sessionFiles) {
     const sessionFile = await readJsonFile<HermesSessionFile>(path.join(SESSIONS_DIR, file))
     if (!sessionFile?.session_id) continue
+    const rawMessages = sessionFile.messages || []
     const summary = summarizeSession(
       sessionFile,
       indexBySessionId.get(sessionFile.session_id),
       webuiMap.get(sessionFile.session_id),
     )
-    const key = dedupeKey(summary)
-    const existing = deduped.get(key)
-    if (!existing || +new Date(summary.updatedAt) > +new Date(existing.updatedAt)) {
-      deduped.set(key, summary)
+    const candidate: SessionCandidate = {
+      summary,
+      rawMessages,
+      messageKeys: toComparableMessages(rawMessages),
+      hasIndex: indexBySessionId.has(sessionFile.session_id),
+      hasJsonl: await fileExists(path.join(SESSIONS_DIR, `${sessionFile.session_id}.jsonl`)),
+    }
+    const familyKey = coarseFamilyKey(summary, firstUserMessage(rawMessages))
+    const bucket = familyBuckets.get(familyKey)
+    if (bucket) {
+      bucket.push(candidate)
+    } else {
+      familyBuckets.set(familyKey, [candidate])
     }
   }
 
-  const sessions = Array.from(deduped.values()).sort(
-    (left, right) => +new Date(right.updatedAt) - +new Date(left.updatedAt),
-  )
-  listCache = { loadedAt: Date.now(), sessions }
-  return sessions
+  const summariesById = new Map<string, SessionSummary>()
+  const branchesByRootId = new Map<string, SessionBranchSummary[]>()
+  const visibleSessions: SessionSummary[] = []
+
+  for (const bucket of familyBuckets.values()) {
+    const candidates = [...bucket].sort(comparePriority)
+    const families: SessionFamily[] = []
+
+    for (const candidate of candidates) {
+      let assigned = false
+      for (const family of families) {
+        const relation = classifyRelation(family.root, candidate)
+        if (!relation) {
+          continue
+        }
+
+        if (relation.type === 'branch') {
+          family.branches.push({ candidate, branchKind: relation.branchKind || 'unknown' })
+          assigned = true
+          break
+        }
+
+        family.duplicates.push(candidate)
+        assigned = true
+        break
+      }
+
+      if (!assigned) {
+        families.push({ root: candidate, branches: [], duplicates: [] })
+      }
+    }
+
+    for (const family of families) {
+      const rootSummary: SessionSummary = {
+        ...family.root.summary,
+        relationKind: 'root',
+        rootSessionId: family.root.summary.id,
+        hiddenFromList: false,
+        branchCount: family.branches.length,
+      }
+      visibleSessions.push(rootSummary)
+      summariesById.set(rootSummary.id, rootSummary)
+
+      const branchSummaries = family.branches.map(({ candidate, branchKind }) => {
+        const branchSummary: SessionSummary = {
+          ...candidate.summary,
+          relationKind: 'branch',
+          rootSessionId: rootSummary.id,
+          hiddenFromList: true,
+          branchKind,
+          branchLabel: branchKindLabel(branchKind),
+          branchCount: 0,
+        }
+        summariesById.set(branchSummary.id, branchSummary)
+        return buildBranchSummary(branchSummary)
+      })
+
+      branchesByRootId.set(rootSummary.id, branchSummaries)
+    }
+  }
+
+  const graph: SessionGraph = {
+    sessions: visibleSessions.sort(
+      (left, right) => +new Date(right.updatedAt) - +new Date(left.updatedAt),
+    ),
+    summariesById,
+    branchesByRootId,
+  }
+  listCache = { loadedAt: Date.now(), graph }
+  return graph
+}
+
+export async function loadSessionSummaries() {
+  const graph = await loadSessionGraph()
+  return graph.sessions
 }
 
 function toolCallKind(name: string | undefined): ToolCallKind {
@@ -720,8 +979,8 @@ function buildToolGroupMessage(
 }
 
 export async function loadSessionDetail(sessionId: string): Promise<SessionDetail | null> {
-  const summaries = await loadSessionSummaries()
-  const summary = summaries.find((item) => item.id === sessionId)
+  const graph = await loadSessionGraph()
+  const summary = graph.summariesById.get(sessionId)
   if (!summary) {
     return null
   }
@@ -875,5 +1134,6 @@ export async function loadSessionDetail(sessionId: string): Promise<SessionDetai
   return {
     ...summary,
     messages,
+    branches: graph.branchesByRootId.get(summary.rootSessionId) || [],
   }
 }

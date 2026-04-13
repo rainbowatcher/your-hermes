@@ -23,6 +23,7 @@ const props = defineProps<{
 
 const emits = defineEmits<{
   (event: 'update:message-role-filter', value: MessageRoleFilter): void
+  (event: 'open-branch', branchId: string): void
 }>()
 
 const updatedLabel = computed(() =>
@@ -69,8 +70,10 @@ async function jumpToMessage(messageId: string) {
 
         <SessionDetailSidebar
           :navigation-items="userNavigationItems"
+          :selected-session-id="session.id"
           :session="session"
           @jump="jumpToMessage"
+          @open-branch="emits('open-branch', $event)"
         />
       </div>
     </template>
