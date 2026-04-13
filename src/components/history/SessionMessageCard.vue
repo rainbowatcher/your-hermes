@@ -41,7 +41,6 @@ const props = defineProps<{
           {{ props.message.timestamp.slice(5, 16).replace('T', ' ') }}
         </span>
       </div>
-
       <slot />
     </div>
   </article>
