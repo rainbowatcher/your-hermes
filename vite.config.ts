@@ -4,7 +4,7 @@ import vue from '@vitejs/plugin-vue'
 import tailwindcss from '@tailwindcss/vite'
 import { defineConfig, type Plugin } from 'vite-plus'
 import vueDevTools from 'vite-plugin-vue-devtools'
-import { loadSessionDetail, loadSessionSummaries } from './server/hermes-sessions'
+import { loadSessionDetail, loadSessionSummaries } from './server/hermes-sessions.ts'
 
 /**
  * 负责：为本地开发/预览环境注入读取 ~/.hermes 会话的 API。
@@ -46,11 +46,12 @@ function hermesSessionsApiPlugin(): Plugin {
           if (!handled) {
             next()
           }
-        }
-        catch (error) {
+        } catch (error) {
           res.statusCode = 500
           res.setHeader('Content-Type', 'application/json; charset=utf-8')
-          res.end(JSON.stringify({ error: error instanceof Error ? error.message : 'unknown error' }))
+          res.end(
+            JSON.stringify({ error: error instanceof Error ? error.message : 'unknown error' }),
+          )
         }
       })
     },
@@ -67,11 +68,12 @@ function hermesSessionsApiPlugin(): Plugin {
           if (!handled) {
             next()
           }
-        }
-        catch (error) {
+        } catch (error) {
           res.statusCode = 500
           res.setHeader('Content-Type', 'application/json; charset=utf-8')
-          res.end(JSON.stringify({ error: error instanceof Error ? error.message : 'unknown error' }))
+          res.end(
+            JSON.stringify({ error: error instanceof Error ? error.message : 'unknown error' }),
+          )
         }
       })
     },
@@ -80,8 +82,8 @@ function hermesSessionsApiPlugin(): Plugin {
 
 export default defineConfig({
   fmt: {
-    singleQuote: false,
-    trailingComma: 'es5',
+    semi: false,
+    singleQuote: true,
   },
   plugins: [vue(), vueDevTools(), tailwindcss(), hermesSessionsApiPlugin()],
   resolve: {
