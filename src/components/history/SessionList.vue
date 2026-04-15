@@ -140,7 +140,6 @@ const statusItems = [
             </AccordionTrigger>
 
             <AccordionContent class="h-auto">
-              <!-- <div class="space-y-1"> -->
               <button
                 v-for="session in group.sessions"
                 :key="session.id"
@@ -157,7 +156,8 @@ const statusItems = [
               >
                 <component
                   :is="statusMeta[session.status].icon"
-                  class="size-3.5 shrink-0"
+                  class="size-3.5"
+                  :class="session.status === 'attention' ? 'text-amber-300' : ''"
                   :title="statusMeta[session.status].title"
                 />
                 <div class="min-w-0 flex-1">
@@ -173,13 +173,7 @@ const statusItems = [
                   </div>
                 </div>
                 <Pin v-if="session.pinned" class="size-3 shrink-0 text-primary" title="已置顶" />
-                <AlertTriangle
-                  v-else-if="session.issueCount"
-                  class="size-3 shrink-0 text-amber-300"
-                  :title="`${session.issueCount} 条异常`"
-                />
               </button>
-              <!-- </div> -->
             </AccordionContent>
           </AccordionItem>
         </Accordion>

@@ -3,13 +3,37 @@
  * 不负责：UI 渲染、会话写回、消息发送。
  */
 import fs from 'node:fs/promises'
-import os from 'node:os'
-import path from 'node:path'
+import {
+  deriveCanonicalSessionFields,
+  type CanonicalHermesIndexEntry,
+  type CanonicalHermesSessionFile,
+} from './hermes-data/sessions/canonical-source.ts'
+import {
+  fileExists,
+  listSessionFiles,
+  loadIndexMap,
+  readJsonFile,
+  sessionFilePath,
+  sessionJsonFilePath,
+  sessionJsonlFilePath,
+} from './hermes-data/sessions/files.ts'
+import { buildSessionGraph, type SessionGraph } from './hermes-data/sessions/graph.ts'
+import {
+  branchKindLabel,
+  coarseFamilyKey,
+  firstUserMessage,
+  toComparableMessages,
+  type SessionBranchKind,
+  type SessionCandidate,
+  type SessionRelationKind,
+} from './hermes-data/sessions/lineage.ts'
+import {
+  buildToolCallEntry,
+  buildToolGroupMessage,
+  type ToolCallKind as NormalizedToolCallKind,
+  type ToolCallMeta,
+} from './hermes-data/sessions/tool-calls.ts'
 
-const HERMES_HOME = process.env.HERMES_HOME || path.join(os.homedir(), '.hermes')
-const SESSIONS_DIR = path.join(HERMES_HOME, 'sessions')
-const WEBUI_SESSIONS_DIR = path.join(HERMES_HOME, 'webui', 'sessions')
-const INDEX_FILE = path.join(SESSIONS_DIR, 'sessions.json')
 const CACHE_TTL_MS = 3_000
 
 const SKILL_REVIEW_PROMPT =
@@ -53,35 +77,13 @@ interface HermesSessionFile {
   messages?: RawHermesMessage[]
 }
 
-interface WebUiSessionFile {
-  session_id: string
-  title?: string
-  workspace?: string
-  pinned?: boolean
-  archived?: boolean
-  created_at?: string
-  updated_at?: string
-}
-
-interface ToolCallMeta {
-  name: string
-  arguments: string
-}
-
 export interface SessionParticipant {
   id: string
   name: string
   shortName: string
 }
 
-export type ToolCallKind = 'tool' | 'skill'
-export type SessionRelationKind = 'root' | 'branch' | 'duplicate'
-export type SessionBranchKind =
-  | 'skill-review'
-  | 'memory-review'
-  | 'combined-review'
-  | 'compression'
-  | 'unknown'
+export type ToolCallKind = NormalizedToolCallKind
 
 export interface ToolCallEntry {
   id: string
@@ -157,27 +159,9 @@ export interface SessionDetail extends SessionSummary {
   branches: SessionBranchSummary[]
 }
 
-interface SessionCandidate {
-  summary: SessionSummary
-  rawMessages: RawHermesMessage[]
-  messageKeys: string[]
-  hasIndex: boolean
-  hasJsonl: boolean
-}
+type SessionGraphRecord = SessionGraph<SessionSummary, SessionBranchSummary>
 
-interface SessionFamily {
-  root: SessionCandidate
-  branches: Array<{ candidate: SessionCandidate; branchKind: SessionBranchKind }>
-  duplicates: SessionCandidate[]
-}
-
-interface SessionGraph {
-  sessions: SessionSummary[]
-  summariesById: Map<string, SessionSummary>
-  branchesByRootId: Map<string, SessionBranchSummary[]>
-}
-
-let listCache: { loadedAt: number; graph: SessionGraph } | null = null
+let listCache: { loadedAt: number; graph: SessionGraphRecord } | null = null
 
 function normalizeText(value: string | null | undefined) {
   return (value || '').replace(/\s+/g, ' ').trim()
@@ -199,25 +183,6 @@ function isMessageRole(value: string | undefined): value is MessageRole {
   return value === 'user' || value === 'assistant' || value === 'system' || value === 'tool'
 }
 
-function platformLabel(platform: string) {
-  if (platform === 'discord') return 'Discord'
-  if (platform === 'weixin') return '微信'
-  if (platform === 'cli') return 'CLI'
-  return platform || '未知来源'
-}
-
-function chatTypeLabel(chatType: string) {
-  if (chatType === 'thread') return '线程'
-  if (chatType === 'dm') return '私聊'
-  if (chatType === 'group') return '群聊'
-  if (chatType === 'cli') return '本地'
-  return '历史存档'
-}
-
-function buildGroupLabel(platform: string, chatType: string) {
-  return `${platformLabel(platform)} · ${chatTypeLabel(chatType)}`
-}
-
 function buildShortName(name: string) {
   const clean = normalizeText(name)
   if (!clean) return '??'
@@ -231,25 +196,7 @@ function buildShortName(name: string) {
   )
 }
 
-function humanizeToolName(name: string | undefined) {
-  const clean = normalizeText(name)
-  if (!clean) return 'tool'
-  return clean
-    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
-    .replace(/[_-]+/g, ' ')
-    .toLowerCase()
-}
-
-function coarseFamilyKey(summary: SessionSummary, firstUserMessage: string) {
-  const firstUserPart = firstUserMessage || normalizeText(summary.title).toLowerCase()
-  return [summary.platform, firstUserPart].join('::')
-}
-
-function deriveTitle(
-  indexEntry: HermesIndexEntry | undefined,
-  webuiEntry: WebUiSessionFile | undefined,
-  sessionFile: HermesSessionFile,
-) {
+function deriveTitle(indexEntry: HermesIndexEntry | undefined, sessionFile: HermesSessionFile) {
   const displayName = normalizeText(indexEntry?.display_name)
   if (displayName) {
     const parts = displayName
@@ -257,11 +204,6 @@ function deriveTitle(
       .map((part) => part.trim())
       .filter(Boolean)
     return parts.at(-1) || displayName
-  }
-
-  const webTitle = normalizeText(webuiEntry?.title)
-  if (webTitle && webTitle !== 'Untitled') {
-    return webTitle
   }
 
   const firstUser = sessionFile.messages?.find(
@@ -349,241 +291,6 @@ function deriveParticipants(indexEntry: HermesIndexEntry | undefined, roles: Mes
   return participants
 }
 
-async function fileExists(filePath: string) {
-  try {
-    await fs.access(filePath)
-    return true
-  } catch {
-    return false
-  }
-}
-
-async function readJsonFile<T>(filePath: string): Promise<T | null> {
-  try {
-    const raw = await fs.readFile(filePath, 'utf8')
-    return JSON.parse(raw) as T
-  } catch {
-    return null
-  }
-}
-
-async function loadIndexMap() {
-  return (await readJsonFile<Record<string, HermesIndexEntry>>(INDEX_FILE)) || {}
-}
-
-async function loadWebUiMap() {
-  const map = new Map<string, WebUiSessionFile>()
-  let files: string[] = []
-
-  try {
-    files = await fs.readdir(WEBUI_SESSIONS_DIR)
-  } catch {
-    return map
-  }
-
-  for (const file of files) {
-    if (!file.endsWith('.json')) continue
-    const record = await readJsonFile<WebUiSessionFile>(path.join(WEBUI_SESSIONS_DIR, file))
-    if (record?.session_id) {
-      map.set(record.session_id, record)
-    }
-  }
-
-  return map
-}
-
-async function listSessionFiles() {
-  const files = await fs.readdir(SESSIONS_DIR)
-  return files
-    .filter((file) => /^session_.+\.json$/u.test(file))
-    .sort()
-    .reverse()
-}
-
-function summarizeSession(
-  sessionFile: HermesSessionFile,
-  indexEntry: HermesIndexEntry | undefined,
-  webuiEntry: WebUiSessionFile | undefined,
-): SessionSummary {
-  const messages = sessionFile.messages || []
-  const roles = deriveAvailableRoles(messages)
-  const toolMessages = messages.filter(
-    (message) => message.role === 'tool' && normalizeText(message.content),
-  )
-  const platform = normalizeText(sessionFile.platform || indexEntry?.platform) || 'unknown'
-  const chatType =
-    normalizeText(indexEntry?.chat_type || indexEntry?.origin?.chat_type) ||
-    (platform === 'cli' ? 'cli' : 'unknown')
-  const createdAt =
-    webuiEntry?.created_at ||
-    indexEntry?.created_at ||
-    sessionFile.session_start ||
-    sessionFile.last_updated ||
-    new Date().toISOString()
-  const updatedAt =
-    webuiEntry?.updated_at || indexEntry?.updated_at || sessionFile.last_updated || createdAt
-
-  let issueCount = 0
-  for (const message of toolMessages) {
-    if (message.content && detectIssue(message.content)) {
-      issueCount += 1
-    }
-  }
-
-  let status: SessionStatus = 'archived'
-  if (webuiEntry?.archived === true || indexEntry?.suspended === true) {
-    status = 'archived'
-  } else if (issueCount > 0) {
-    status = 'attention'
-  } else if (indexEntry?.session_id) {
-    status = 'active'
-  }
-
-  const tags = [
-    platform,
-    chatType,
-    issueCount > 0 ? 'tool-error' : '',
-    webuiEntry?.pinned ? 'pinned' : '',
-  ].filter(Boolean)
-
-  return {
-    id: sessionFile.session_id,
-    title: deriveTitle(indexEntry, webuiEntry, sessionFile),
-    workspace: normalizeText(webuiEntry?.workspace) || '未记录工作区',
-    channel: deriveChannel(indexEntry),
-    sessionFilePath: path.join(SESSIONS_DIR, `${sessionFile.session_id}.jsonl`),
-    status,
-    summary: deriveSummary(sessionFile),
-    tags,
-    participants: deriveParticipants(indexEntry, roles),
-    unreadCount: 0,
-    pinned: Boolean(webuiEntry?.pinned),
-    updatedAt,
-    createdAt,
-    model: normalizeText(sessionFile.model) || 'unknown',
-    messageCount: sessionFile.message_count || messages.length,
-    tokenCount: indexEntry?.last_prompt_tokens || 0,
-    platform,
-    chatType,
-    platformLabel: platformLabel(platform),
-    groupLabel: buildGroupLabel(platform, chatType),
-    issueCount,
-    toolMessageCount: toolMessages.length,
-    availableRoles: roles,
-    relationKind: 'root',
-    rootSessionId: sessionFile.session_id,
-    hiddenFromList: false,
-    branchCount: 0,
-  }
-}
-
-function buildMessageKey(message: RawHermesMessage) {
-  const role = typeof message.role === 'string' ? message.role : 'unknown'
-  const content = normalizeText(message.content)
-  return content ? `${role}:${content}` : ''
-}
-
-function firstUserMessage(messages: RawHermesMessage[]) {
-  for (const message of messages) {
-    if (message.role !== 'user') continue
-    const content = normalizeText(message.content)
-    if (content) {
-      return content.toLowerCase()
-    }
-  }
-  return ''
-}
-
-function toComparableMessages(messages: RawHermesMessage[]) {
-  return messages.map(buildMessageKey).filter(Boolean)
-}
-
-function sessionPriority(candidate: SessionCandidate) {
-  return [
-    candidate.hasIndex ? 1 : 0,
-    candidate.hasJsonl ? 1 : 0,
-    candidate.summary.messageCount,
-    candidate.summary.toolMessageCount,
-    +new Date(candidate.summary.updatedAt),
-  ]
-}
-
-function comparePriority(left: SessionCandidate, right: SessionCandidate) {
-  const leftPriority = sessionPriority(left)
-  const rightPriority = sessionPriority(right)
-  for (let index = 0; index < leftPriority.length; index += 1) {
-    const delta = rightPriority[index] - leftPriority[index]
-    if (delta !== 0) {
-      return delta
-    }
-  }
-  return right.summary.id.localeCompare(left.summary.id)
-}
-
-function commonPrefixLength(left: string[], right: string[]) {
-  const max = Math.min(left.length, right.length)
-  let index = 0
-  while (index < max && left[index] === right[index]) {
-    index += 1
-  }
-  return index
-}
-
-function branchKindLabel(branchKind: SessionBranchKind) {
-  if (branchKind === 'skill-review') return 'skill 提炼'
-  if (branchKind === 'memory-review') return 'memory 提炼'
-  if (branchKind === 'combined-review') return 'memory / skill 提炼'
-  if (branchKind === 'compression') return '压缩续写'
-  return '派生分支'
-}
-
-function detectReviewBranchKindFromKey(messageKey: string | undefined): SessionBranchKind | null {
-  if (!messageKey || !messageKey.startsWith('user:')) {
-    return null
-  }
-
-  const content = messageKey.slice('user:'.length)
-  if (!content) {
-    return null
-  }
-
-  if (content.startsWith(SKILL_REVIEW_PROMPT)) {
-    return 'skill-review'
-  }
-  if (content.startsWith(MEMORY_REVIEW_PROMPT)) {
-    return 'memory-review'
-  }
-  if (content.startsWith(COMBINED_REVIEW_PROMPT)) {
-    return 'combined-review'
-  }
-  return null
-}
-
-function classifyRelation(
-  root: SessionCandidate,
-  candidate: SessionCandidate,
-): { type: SessionRelationKind; branchKind?: SessionBranchKind } | null {
-  const shorterLength = Math.min(root.messageKeys.length, candidate.messageKeys.length)
-  if (shorterLength < 4) {
-    return null
-  }
-
-  const prefixLength = commonPrefixLength(root.messageKeys, candidate.messageKeys)
-  const prefixRatio = prefixLength / shorterLength
-  const divergenceKey = candidate.messageKeys[prefixLength]
-  const reviewBranchKind = detectReviewBranchKindFromKey(divergenceKey)
-
-  if (reviewBranchKind && prefixLength >= 20 && prefixRatio >= 0.8) {
-    return { type: 'branch', branchKind: reviewBranchKind }
-  }
-
-  if (prefixRatio >= 0.95 && prefixLength >= shorterLength - 1) {
-    return { type: 'duplicate' }
-  }
-
-  return null
-}
-
 function buildBranchSummary(summary: SessionSummary): SessionBranchSummary {
   return {
     id: summary.id,
@@ -598,14 +305,66 @@ function buildBranchSummary(summary: SessionSummary): SessionBranchSummary {
   }
 }
 
-async function loadSessionGraph(): Promise<SessionGraph> {
+function summarizeSession(
+  sessionFile: HermesSessionFile,
+  indexEntry: HermesIndexEntry | undefined,
+): SessionSummary {
+  const messages = sessionFile.messages || []
+  const roles = deriveAvailableRoles(messages)
+  const toolMessages = messages.filter(
+    (message) => message.role === 'tool' && normalizeText(message.content),
+  )
+  let issueCount = 0
+  for (const message of toolMessages) {
+    if (message.content && detectIssue(message.content)) {
+      issueCount += 1
+    }
+  }
+
+  const canonical = deriveCanonicalSessionFields({
+    sessionFile: sessionFile satisfies CanonicalHermesSessionFile,
+    indexEntry: indexEntry satisfies CanonicalHermesIndexEntry | undefined,
+    issueCount,
+  })
+
+  return {
+    id: sessionFile.session_id,
+    title: deriveTitle(indexEntry, sessionFile),
+    workspace: canonical.workspace,
+    channel: deriveChannel(indexEntry),
+    sessionFilePath: sessionJsonlFilePath(sessionFile.session_id),
+    status: canonical.status,
+    summary: deriveSummary(sessionFile),
+    tags: canonical.tags,
+    participants: deriveParticipants(indexEntry, roles),
+    unreadCount: 0,
+    pinned: canonical.pinned,
+    updatedAt: canonical.updatedAt,
+    createdAt: canonical.createdAt,
+    model: normalizeText(sessionFile.model) || 'unknown',
+    messageCount: sessionFile.message_count || messages.length,
+    tokenCount: canonical.tokenCount,
+    platform: canonical.platform,
+    chatType: canonical.chatType,
+    platformLabel: canonical.platformLabel,
+    groupLabel: canonical.groupLabel,
+    issueCount,
+    toolMessageCount: toolMessages.length,
+    availableRoles: roles,
+    relationKind: 'root',
+    rootSessionId: sessionFile.session_id,
+    hiddenFromList: false,
+    branchCount: 0,
+  }
+}
+
+async function loadSessionGraph(): Promise<SessionGraphRecord> {
   if (listCache && Date.now() - listCache.loadedAt < CACHE_TTL_MS) {
     return listCache.graph
   }
 
-  const [indexMap, webuiMap, sessionFiles] = await Promise.all([
-    loadIndexMap(),
-    loadWebUiMap(),
+  const [indexMap, sessionFiles] = await Promise.all([
+    loadIndexMap<HermesIndexEntry>(),
     listSessionFiles(),
   ])
   const indexBySessionId = new Map<string, HermesIndexEntry>()
@@ -616,23 +375,19 @@ async function loadSessionGraph(): Promise<SessionGraph> {
     }
   }
 
-  const familyBuckets = new Map<string, SessionCandidate[]>()
+  const familyBuckets = new Map<string, SessionCandidate<SessionSummary>[]>()
 
   for (const file of sessionFiles) {
-    const sessionFile = await readJsonFile<HermesSessionFile>(path.join(SESSIONS_DIR, file))
+    const sessionFile = await readJsonFile<HermesSessionFile>(sessionFilePath(file))
     if (!sessionFile?.session_id) continue
     const rawMessages = sessionFile.messages || []
-    const summary = summarizeSession(
-      sessionFile,
-      indexBySessionId.get(sessionFile.session_id),
-      webuiMap.get(sessionFile.session_id),
-    )
-    const candidate: SessionCandidate = {
+    const summary = summarizeSession(sessionFile, indexBySessionId.get(sessionFile.session_id))
+    const candidate: SessionCandidate<SessionSummary> = {
       summary,
       rawMessages,
       messageKeys: toComparableMessages(rawMessages),
       hasIndex: indexBySessionId.has(sessionFile.session_id),
-      hasJsonl: await fileExists(path.join(SESSIONS_DIR, `${sessionFile.session_id}.jsonl`)),
+      hasJsonl: await fileExists(sessionJsonlFilePath(sessionFile.session_id)),
     }
     const familyKey = coarseFamilyKey(summary, firstUserMessage(rawMessages))
     const bucket = familyBuckets.get(familyKey)
@@ -643,74 +398,38 @@ async function loadSessionGraph(): Promise<SessionGraph> {
     }
   }
 
-  const summariesById = new Map<string, SessionSummary>()
-  const branchesByRootId = new Map<string, SessionBranchSummary[]>()
-  const visibleSessions: SessionSummary[] = []
-
-  for (const bucket of familyBuckets.values()) {
-    const candidates = [...bucket].sort(comparePriority)
-    const families: SessionFamily[] = []
-
-    for (const candidate of candidates) {
-      let assigned = false
-      for (const family of families) {
-        const relation = classifyRelation(family.root, candidate)
-        if (!relation) {
-          continue
-        }
-
-        if (relation.type === 'branch') {
-          family.branches.push({ candidate, branchKind: relation.branchKind || 'unknown' })
-          assigned = true
-          break
-        }
-
-        family.duplicates.push(candidate)
-        assigned = true
-        break
-      }
-
-      if (!assigned) {
-        families.push({ root: candidate, branches: [], duplicates: [] })
-      }
-    }
-
-    for (const family of families) {
-      const rootSummary: SessionSummary = {
-        ...family.root.summary,
+  const graph = buildSessionGraph<SessionSummary, SessionBranchSummary>({
+    familyBuckets: familyBuckets.values(),
+    prompts: {
+      skillReviewPrompt: SKILL_REVIEW_PROMPT,
+      memoryReviewPrompt: MEMORY_REVIEW_PROMPT,
+      combinedReviewPrompt: COMBINED_REVIEW_PROMPT,
+    },
+    createRootSummary(summary, branchCount) {
+      return {
+        ...summary,
         relationKind: 'root',
-        rootSessionId: family.root.summary.id,
+        rootSessionId: summary.id,
         hiddenFromList: false,
-        branchCount: family.branches.length,
+        branchCount,
       }
-      visibleSessions.push(rootSummary)
-      summariesById.set(rootSummary.id, rootSummary)
-
-      const branchSummaries = family.branches.map(({ candidate, branchKind }) => {
-        const branchSummary: SessionSummary = {
-          ...candidate.summary,
-          relationKind: 'branch',
-          rootSessionId: rootSummary.id,
-          hiddenFromList: true,
-          branchKind,
-          branchLabel: branchKindLabel(branchKind),
-          branchCount: 0,
-        }
-        summariesById.set(branchSummary.id, branchSummary)
-        return buildBranchSummary(branchSummary)
-      })
-
-      branchesByRootId.set(rootSummary.id, branchSummaries)
-    }
-  }
-
-  const graph: SessionGraph = {
-    sessions: visibleSessions.sort(
-      (left, right) => +new Date(right.updatedAt) - +new Date(left.updatedAt),
-    ),
-    summariesById,
-    branchesByRootId,
-  }
+    },
+    createBranchRecords(summary, rootId, branchKind) {
+      const branchSummary: SessionSummary = {
+        ...summary,
+        relationKind: 'branch',
+        rootSessionId: rootId,
+        hiddenFromList: true,
+        branchKind,
+        branchLabel: branchKindLabel(branchKind),
+        branchCount: 0,
+      }
+      return {
+        summary: branchSummary,
+        branchSummary: buildBranchSummary(branchSummary),
+      }
+    },
+  })
   listCache = { loadedAt: Date.now(), graph }
   return graph
 }
@@ -720,264 +439,6 @@ export async function loadSessionSummaries() {
   return graph.sessions
 }
 
-function toolCallKind(name: string | undefined): ToolCallKind {
-  if (!name) {
-    return 'tool'
-  }
-
-  return /^skills?_/.test(name) ? 'skill' : 'tool'
-}
-
-function toolContentByKind(parsed: Record<string, unknown> | null, kind: ToolCallKind) {
-  if (!parsed) {
-    return ''
-  }
-
-  const segments: string[] = []
-
-  if (kind === 'skill') {
-    if (typeof parsed.content === 'string' && parsed.content.trim()) {
-      segments.push(parsed.content)
-    }
-    if (typeof parsed.description === 'string' && parsed.description.trim() && !segments.length) {
-      segments.push(parsed.description)
-    }
-  } else {
-    if (typeof parsed.output === 'string' && parsed.output.trim()) {
-      segments.push(parsed.output)
-    }
-    if (typeof parsed.error === 'string' && parsed.error.trim()) {
-      segments.push(parsed.error)
-    }
-    if (typeof parsed.message === 'string' && parsed.message.trim() && !segments.length) {
-      segments.push(parsed.message)
-    }
-    if (typeof parsed.content === 'string' && parsed.content.trim() && !segments.length) {
-      segments.push(parsed.content)
-    }
-  }
-
-  return segments.join('\n\n').trim()
-}
-
-function deriveToolPreview(
-  parsed: Record<string, unknown> | null,
-  raw: string,
-  kind: ToolCallKind,
-) {
-  if (parsed) {
-    const previewKeys =
-      kind === 'skill'
-        ? ['description', 'name', 'summary', 'content']
-        : ['message', 'output', 'error', 'summary', 'content']
-    for (const key of previewKeys) {
-      const value = parsed[key]
-      if (typeof value === 'string' && normalizeText(value)) {
-        return truncate(normalizeText(value), 140)
-      }
-    }
-
-    const keys = Object.keys(parsed)
-    if (keys.length) {
-      return truncate(`{ ${keys.slice(0, 5).join(', ')} }`, 140)
-    }
-  }
-
-  return truncate(normalizeText(raw) || '空工具输出', 140)
-}
-
-function parseToolArguments(argumentsText: string | undefined) {
-  if (!argumentsText) {
-    return null
-  }
-
-  return parseJsonSafe<Record<string, unknown>>(argumentsText)
-}
-
-function normalizeToolSubject(value: unknown, max = 140) {
-  if (typeof value !== 'string') {
-    return ''
-  }
-
-  const clean = normalizeText(value)
-  return clean ? truncate(clean, max) : ''
-}
-
-function deriveToolEventLabel(name: string) {
-  if (/^skills?_/.test(name)) {
-    return 'skill'
-  }
-
-  return humanizeToolName(name)
-}
-
-function deriveToolSubject(name: string, args: Record<string, unknown> | null) {
-  const pathValue = normalizeToolSubject(args?.path)
-  const nameValue = normalizeToolSubject(args?.name)
-  const commandValue = normalizeToolSubject(args?.command)
-  const urlValue = normalizeToolSubject(args?.url)
-  const queryValue = normalizeToolSubject(args?.query)
-  const promptValue = normalizeToolSubject(args?.prompt)
-  const keyValue = normalizeToolSubject(args?.key)
-  const actionValue = normalizeToolSubject(args?.action)
-  const targetValue = normalizeToolSubject(args?.target)
-  const refValue = normalizeToolSubject(args?.ref)
-  const directionValue = normalizeToolSubject(args?.direction)
-  const goalValue = normalizeToolSubject(args?.goal)
-  const filePathValue = normalizeToolSubject(args?.file_path)
-  const oldTextValue = normalizeToolSubject(args?.old_text)
-  const sessionIdValue = normalizeToolSubject(args?.session_id)
-  const questionValue = normalizeToolSubject(args?.question)
-
-  if (name === 'read_file' || name === 'write_file' || name === 'patch') {
-    return pathValue || filePathValue || '未指定路径'
-  }
-
-  if (name === 'search_files') {
-    const patternValue = normalizeToolSubject(args?.pattern)
-    const scopeValue = normalizeToolSubject(args?.path)
-    if (patternValue && scopeValue) {
-      return `${patternValue} @ ${scopeValue}`
-    }
-    return patternValue || scopeValue || '未指定查询'
-  }
-
-  if (name === 'terminal') {
-    return commandValue || '未指定命令'
-  }
-
-  if (name === 'execute_code') {
-    return normalizeToolSubject(args?.code) || 'python'
-  }
-
-  if (name === 'todo') {
-    const todos = Array.isArray(args?.todos) ? args.todos : []
-    const firstTodo = todos[0]
-    if (firstTodo && typeof firstTodo === 'object' && 'content' in firstTodo) {
-      return normalizeToolSubject(firstTodo.content, 80) || '更新任务清单'
-    }
-    return '更新任务清单'
-  }
-
-  if (name === 'process') {
-    return [actionValue, sessionIdValue].filter(Boolean).join(' · ') || '进程操作'
-  }
-
-  if (name === 'browser_navigate') {
-    return urlValue || '未指定地址'
-  }
-
-  if (
-    name === 'browser_click' ||
-    name === 'browser_type' ||
-    name === 'browser_press' ||
-    name === 'browser_scroll'
-  ) {
-    return refValue || keyValue || directionValue || '浏览器交互'
-  }
-
-  if (name === 'browser_console' || name === 'browser_vision') {
-    return normalizeToolSubject(args?.expression) || questionValue || '浏览器检查'
-  }
-
-  if (name === 'session_search') {
-    return queryValue || 'recent sessions'
-  }
-
-  if (name === 'memory') {
-    return [actionValue, targetValue || normalizeToolSubject(args?.content, 80)]
-      .filter(Boolean)
-      .join(' · ')
-  }
-
-  if (name === 'skill_view' || name === 'skill_manage') {
-    return nameValue || filePathValue || actionValue || '未指定技能'
-  }
-
-  if (name === 'skills_list') {
-    return normalizeToolSubject(args?.category) || 'all'
-  }
-
-  if (name === 'delegate_task') {
-    return goalValue || '委派任务'
-  }
-
-  if (name === 'clarify') {
-    return questionValue || '需要确认'
-  }
-
-  if (name === 'cronjob') {
-    return [actionValue, normalizeToolSubject(args?.name) || promptValue]
-      .filter(Boolean)
-      .join(' · ')
-  }
-
-  return (
-    nameValue ||
-    pathValue ||
-    commandValue ||
-    queryValue ||
-    promptValue ||
-    goalValue ||
-    oldTextValue ||
-    'details'
-  )
-}
-
-function deriveToolTitle(name: string, argumentsText: string | undefined) {
-  const args = parseToolArguments(argumentsText)
-  const eventLabel = deriveToolEventLabel(name)
-  const subject = deriveToolSubject(name, args)
-  return `${eventLabel}: ${subject}`
-}
-
-function buildToolCallEntry(
-  sessionId: string,
-  index: number,
-  content: string,
-  meta?: ToolCallMeta,
-  toolCallId?: string,
-): ToolCallEntry {
-  const parsed = parseJsonSafe<Record<string, unknown>>(content)
-  const rawJson = parsed ? JSON.stringify(parsed, null, 2) : content
-  const hasError = detectIssue(content)
-  const name = meta?.name || 'tool'
-  const kind = toolCallKind(name)
-  const primaryContent = toolContentByKind(parsed, kind)
-
-  return {
-    id: `${sessionId}-tool-call-${index}`,
-    title: deriveToolTitle(name, meta?.arguments),
-    name,
-    kind,
-    preview: deriveToolPreview(parsed, content, kind),
-    rawJson,
-    primaryContent,
-    toolArguments: meta?.arguments,
-    toolCallId,
-    hasError,
-  }
-}
-
-function buildToolGroupMessage(
-  sessionId: string,
-  startIndex: number,
-  timestamp: string,
-  toolCalls: ToolCallEntry[],
-): SessionMessage {
-  return {
-    id: `${sessionId}-tool-group-${startIndex}`,
-    role: 'tool',
-    author: `${toolCalls.length} 次工具调用`,
-    timestamp,
-    content: '',
-    preview: truncate(toolCalls.map((call) => `${call.title}: ${call.preview}`).join(' · '), 180),
-    hasError: toolCalls.some((call) => Boolean(call.hasError)),
-    collapsedByDefault: true,
-    toolCalls,
-  }
-}
-
 export async function loadSessionDetail(sessionId: string): Promise<SessionDetail | null> {
   const graph = await loadSessionGraph()
   const summary = graph.summariesById.get(sessionId)
@@ -985,13 +446,15 @@ export async function loadSessionDetail(sessionId: string): Promise<SessionDetai
     return null
   }
 
-  const jsonlFile = path.join(SESSIONS_DIR, `${sessionId}.jsonl`)
+  const jsonlFile = sessionJsonlFilePath(sessionId)
   const toolCallMeta = new Map<string, ToolCallMeta>()
   const messages: SessionMessage[] = []
 
   const flushToolBuffer = (buffer: ToolCallEntry[], startIndex: number, timestamp: string) => {
     if (!buffer.length) return
-    messages.push(buildToolGroupMessage(sessionId, startIndex, timestamp, [...buffer]))
+    messages.push(
+      buildToolGroupMessage({ sessionId, startIndex, timestamp, toolCalls: [...buffer] }),
+    )
     buffer.length = 0
   }
 
@@ -1054,7 +517,9 @@ export async function loadSessionDetail(sessionId: string): Promise<SessionDetai
           toolBufferIndex = index
           toolBufferTimestamp = timestamp
         }
-        toolBuffer.push(buildToolCallEntry(sessionId, index, content, meta, toolCallId))
+        toolBuffer.push(
+          buildToolCallEntry({ sessionId, index, content, meta, toolCallId, detectIssue }),
+        )
         continue
       }
 
@@ -1078,16 +543,19 @@ export async function loadSessionDetail(sessionId: string): Promise<SessionDetai
   }
 
   if (!messages.length) {
-    const sessionFile = await readJsonFile<HermesSessionFile>(
-      path.join(SESSIONS_DIR, `session_${sessionId}.json`),
-    )
+    const sessionFile = await readJsonFile<HermesSessionFile>(sessionJsonFilePath(sessionId))
     const toolBuffer: ToolCallEntry[] = []
     let toolBufferIndex = 0
 
     const flushFallbackToolBuffer = () => {
       if (!toolBuffer.length) return
       messages.push(
-        buildToolGroupMessage(sessionId, toolBufferIndex, summary.updatedAt, [...toolBuffer]),
+        buildToolGroupMessage({
+          sessionId,
+          startIndex: toolBufferIndex,
+          timestamp: summary.updatedAt,
+          toolCalls: [...toolBuffer],
+        }),
       )
       toolBuffer.length = 0
     }
@@ -1107,7 +575,13 @@ export async function loadSessionDetail(sessionId: string): Promise<SessionDetai
           toolBufferIndex = index
         }
         toolBuffer.push(
-          buildToolCallEntry(sessionId, index, content, { name: 'tool', arguments: '' }),
+          buildToolCallEntry({
+            sessionId,
+            index,
+            content,
+            meta: { name: 'tool', arguments: '' },
+            detectIssue,
+          }),
         )
         continue
       }
