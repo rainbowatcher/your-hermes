@@ -41,16 +41,20 @@ export default defineConfig({
     tailwindcss(),
   ],
   test: {
-    name: 'node',
-    include: ['server/**/*.test.ts'],
-    environment: 'node',
     projects: [
+      {
+        extends: true,
+        test: {
+          name: 'server',
+          include: ['server/**/*.test.ts'],
+          environment: 'node',
+        },
+      },
       {
         extends: true,
         test: {
           name: 'browser',
           include: ['src/**/*.browser.test.ts'],
-          exclude: ['server/**/*.test.ts'],
           setupFiles: ['vitest-browser-vue'],
           browser: {
             enabled: true,
