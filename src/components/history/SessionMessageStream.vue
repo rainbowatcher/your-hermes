@@ -11,7 +11,14 @@ import SessionRichTextMessage, {
   type TextMessageViewMode,
 } from '@/components/history/SessionRichTextMessage.vue'
 import SessionToolMessage from '@/components/history/SessionToolMessage.vue'
-import { Card } from '@/components/ui/card'
+import {
+  Card,
+  CardAction,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card'
 import type {
   MessageRole,
   MessageRoleFilter,
@@ -30,9 +37,9 @@ const emits = defineEmits<{
   (event: 'update:message-role-filter', value: MessageRoleFilter): void
 }>()
 
-const expandedToolIds = ref<string[]>([])
 const toolViewModes = ref<Record<string, ToolMessageViewMode>>({})
 const textViewModes = ref<Record<string, TextMessageViewMode>>({})
+const allExpanded = ref<boolean | null>(null)
 
 const roleTheme = {
   user: 'border-sky-500/20 bg-sky-500/8',
@@ -53,16 +60,6 @@ const filteredMessages = computed(() =>
     (message) => props.messageRoleFilter === 'all' || message.role === props.messageRoleFilter,
   ),
 )
-
-function hasExpandedTool(messageId: string) {
-  return expandedToolIds.value.includes(messageId)
-}
-
-function toggleToolMessage(messageId: string) {
-  expandedToolIds.value = hasExpandedTool(messageId)
-    ? expandedToolIds.value.filter((id) => id !== messageId)
-    : [...expandedToolIds.value, messageId]
-}
 
 function toolViewModeKey(messageId: string, toolCallId: string) {
   return `${messageId}:${toolCallId}`
@@ -99,18 +96,37 @@ function roleIcon(role: MessageRole) {
   if (role === 'system') return Braces
   return Wrench
 }
+
+function isMessageExpanded(message: SessionMessage) {
+  if (allExpanded.value === null) return message.role === 'user'
+  return allExpanded.value
+}
+
+function toggleExpandAll() {
+  allExpanded.value = allExpanded.value === true ? false : true
+}
 </script>
 
 <template>
   <Card class="flex min-h-0 flex-col border-border/70 bg-card/60 py-0">
-    <SessionMessageStreamToolbar
-      :available-roles="availableRoles"
-      :message-role-filter="messageRoleFilter"
-      :role-labels="roleLabels"
-      @update:message-role-filter="emits('update:message-role-filter', $event)"
-    />
+    <CardHeader class="border-b px-3 py-2">
+      <CardTitle class="text-xs font-medium">消息流</CardTitle>
+      <CardDescription class="text-[11px]">
+        按真实消息顺序渲染，保留筛选与工具折叠。
+      </CardDescription>
+      <CardAction>
+        <SessionMessageStreamToolbar
+          :all-expanded="allExpanded === true"
+          :available-roles="availableRoles"
+          :message-role-filter="messageRoleFilter"
+          :role-labels="roleLabels"
+          @toggle-expand-all="toggleExpandAll"
+          @update:message-role-filter="emits('update:message-role-filter', $event)"
+        />
+      </CardAction>
+    </CardHeader>
 
-    <div class="min-h-0 flex-1 overflow-auto">
+    <CardContent class="min-h-0 flex-1 overflow-auto px-0">
       <div
         v-if="filteredMessages.length === 0"
         class="px-4 py-8 text-center text-sm text-muted-foreground"
@@ -122,6 +138,7 @@ function roleIcon(role: MessageRole) {
         <SessionMessageCard
           v-for="message in filteredMessages"
           :key="message.id"
+          :expanded="isMessageExpanded(message)"
           :icon="roleIcon(message.role)"
           :message="message"
           :role-label="roleLabels[message.role]"
@@ -129,11 +146,9 @@ function roleIcon(role: MessageRole) {
         >
           <SessionToolMessage
             v-if="message.role === 'tool'"
-            :expanded="hasExpandedTool(message.id)"
             :message="message"
             :tool-content="(toolCall) => readToolContent(message.id, toolCall)"
             :tool-view-mode="(toolCall) => readToolViewMode(message.id, toolCall)"
-            @toggle="toggleToolMessage(message.id)"
             @update:tool-view-mode="writeToolViewMode(message.id, $event.toolCall, $event.mode)"
           />
 
@@ -149,6 +164,6 @@ function roleIcon(role: MessageRole) {
           </p>
         </SessionMessageCard>
       </div>
-    </div>
+    </CardContent>
   </Card>
 </template>

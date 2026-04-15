@@ -2,6 +2,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import vue from '@vitejs/plugin-vue'
 import tailwindcss from '@tailwindcss/vite'
+import { playwright } from '@voidzero-dev/vite-plus-test/browser/providers/playwright'
 import { defineConfig } from 'vite-plus'
 import vueDevTools from 'vite-plugin-vue-devtools'
 import { handleHermesApiRequest, sendServerError } from './server/api/hermes-api.ts'
@@ -39,6 +40,28 @@ export default defineConfig({
     vueDevTools(),
     tailwindcss(),
   ],
+  test: {
+    name: 'node',
+    include: ['server/**/*.test.ts'],
+    environment: 'node',
+    projects: [
+      {
+        extends: true,
+        test: {
+          name: 'browser',
+          include: ['src/**/*.browser.test.ts'],
+          exclude: ['server/**/*.test.ts'],
+          setupFiles: ['vitest-browser-vue'],
+          browser: {
+            enabled: true,
+            provider: playwright(),
+            instances: [{ browser: 'chromium' }],
+            headless: true,
+          },
+        },
+      },
+    ],
+  },
   server: {
     host: '127.0.0.1',
     port: frontendPort,
