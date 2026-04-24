@@ -25,7 +25,7 @@ const emits = defineEmits<{
 </script>
 
 <template>
-  <div class="mt-2 rounded-md bg-black/8 px-2 py-2">
+  <div class="rounded-md">
     <div class="space-y-2">
       <CollapsibleRoot
         v-for="toolCall in props.message.toolCalls || []"
@@ -35,21 +35,28 @@ const emits = defineEmits<{
       >
         <CollapsibleTrigger
           as="button"
-          class="flex w-full items-center gap-2 rounded-md px-0 py-2 text-left text-[11px] text-current/80"
+          class="flex w-full items-center sticky top-0 z-11 bg-black/15 border gap-2 rounded-md px-4 py-2 text-left text-[11px] text-current/80"
+          :class="{ 'rounded-b-none border-b-0': open }"
         >
           <div class="flex min-w-0 flex-1 items-center justify-between gap-2">
             <span class="truncate font-medium text-current">{{ toolCall.title }}</span>
             <Badge
               variant="outline"
               v-if="toolCall.hasError"
+              :title="toolCall.errorDetail || undefined"
               class="rounded-sm border-current/20 bg-transparent"
               >error</Badge
             >
           </div>
         </CollapsibleTrigger>
-        <CollapsibleContent as="div" class="px-0 pb-0 pt-0">
-          <div :class="cn('relative rounded-md bg-black/10 p-2.5', !open && 'hidden')">
-            <div class="absolute right-2 top-2 z-10 flex items-center gap-1">
+        <CollapsibleContent as-child>
+          <div
+            class="relative bg-black/15 border rounded-md p-2.5"
+            :class="{ 'rounded-t-none border-t-0': open }"
+          >
+            <div
+              class="absolute right-2 top-2 z-10 flex items-center bg-foreground/10 rounded-lg px-1 gap-1"
+            >
               <Button
                 :variant="props.toolViewMode(toolCall) === 'output' ? 'secondary' : 'ghost'"
                 size="icon-xs"

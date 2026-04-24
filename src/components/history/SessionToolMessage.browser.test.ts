@@ -3,6 +3,8 @@ import { render } from 'vitest-browser-vue'
 import SessionToolMessage from './SessionToolMessage.vue'
 import type { SessionMessage, ToolCallEntry } from '@/types/history'
 
+const errorDetail = 'ENOENT: no such file or directory, open "/tmp/demo.txt"'
+
 const toolCalls: ToolCallEntry[] = [
   {
     id: 'tool-1',
@@ -54,4 +56,32 @@ test('SessionToolMessage shows per-tool collapsibles without repeated summary he
 
   await expect.element(firstTrigger).toHaveAttribute('aria-expanded', 'true')
   await expect.element(screen.getByText('File output')).toBeVisible()
+})
+
+test('SessionToolMessage exposes tool error details on hover', async () => {
+  const errorToolCall: ToolCallEntry = {
+    id: 'tool-error',
+    title: 'Read missing file',
+    name: 'read_file',
+    kind: 'tool',
+    preview: 'read missing file',
+    rawJson: `{"error":"${errorDetail}"}`,
+    primaryContent: errorDetail,
+    hasError: true,
+    errorDetail,
+  }
+
+  const screen = await render(SessionToolMessage, {
+    props: {
+      message: {
+        ...message,
+        toolCalls: [errorToolCall],
+      },
+      toolContent: (toolCall: ToolCallEntry) => toolCall.primaryContent,
+      toolViewMode: () => 'output',
+    },
+  })
+
+  const errorBadge = screen.getByText('error')
+  await expect.element(errorBadge).toHaveAttribute('title', errorDetail)
 })

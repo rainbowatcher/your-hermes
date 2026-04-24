@@ -77,7 +77,7 @@ watch(
       <CollapsibleContent
         as="div"
         data-testid="message-content"
-        class="mt-2 max-h-145 overflow-auto px-0 pb-0 pt-0"
+        class="mt-2 max-h-145 overflow-auto relative"
       >
         <slot />
       </CollapsibleContent>
