@@ -1,8 +1,13 @@
 import { expect, test } from 'vitest'
 import { render } from 'vitest-browser-vue'
-import { h } from 'vue'
+import { h, markRaw } from 'vue'
+import type { Component } from 'vue'
 import SessionMessageCard from './SessionMessageCard.vue'
 import type { SessionMessage } from '@/types/history'
+
+const TestIcon: Component = markRaw({
+  render: () => h('div'),
+})
 
 function createMessage(role: SessionMessage['role']): SessionMessage {
   return {
@@ -19,7 +24,7 @@ test('SessionMessageCard respects expanded prop control', async () => {
   const expandedScreen = await render(SessionMessageCard, {
     props: {
       expanded: true,
-      icon: 'div',
+      icon: TestIcon,
       message: createMessage('user'),
       roleLabel: 'User',
       themeClass: 'text-sky-500',
@@ -37,7 +42,7 @@ test('SessionMessageCard respects expanded prop control', async () => {
   const collapsedScreen = await render(SessionMessageCard, {
     props: {
       expanded: false,
-      icon: 'div',
+      icon: TestIcon,
       message: createMessage('assistant'),
       roleLabel: 'Assistant',
       themeClass: 'text-violet-500',
@@ -56,7 +61,7 @@ test('SessionMessageCard respects expanded prop control', async () => {
 test('SessionMessageCard shows collapse arrow and scrollable content area', async () => {
   const screen = await render(SessionMessageCard, {
     props: {
-      icon: 'div',
+      icon: TestIcon,
       message: createMessage('assistant'),
       roleLabel: 'Assistant',
       themeClass: 'text-violet-500',

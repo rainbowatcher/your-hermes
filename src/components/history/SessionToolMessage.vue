@@ -48,9 +48,7 @@ const emits = defineEmits<{
           </div>
         </CollapsibleTrigger>
         <CollapsibleContent as="div" class="px-0 pb-0 pt-0">
-          <div
-            :class="cn('relative rounded-md bg-black/10 p-2.5', !open && 'hidden')"
-          >
+          <div :class="cn('relative rounded-md bg-black/10 p-2.5', !open && 'hidden')">
             <div class="absolute right-2 top-2 z-10 flex items-center gap-1">
               <Button
                 :variant="props.toolViewMode(toolCall) === 'output' ? 'secondary' : 'ghost'"

@@ -2,7 +2,12 @@
  * 负责：把 session candidates 组装成可供列表与详情查询的 session graph。
  * 不负责：文件读取、字段归一化、消息渲染。
  */
-import { buildFamilies, type SessionBranchKind, type SessionCandidate } from './lineage.ts'
+import {
+  buildFamilies,
+  type SessionBranchKind,
+  type SessionCandidate,
+  type SessionLineageSummary,
+} from './lineage.ts'
 
 export interface SessionGraph<TSummary, TBranchSummary> {
   sessions: TSummary[]
@@ -10,10 +15,7 @@ export interface SessionGraph<TSummary, TBranchSummary> {
   branchesByRootId: Map<string, TBranchSummary[]>
 }
 
-export function buildSessionGraph<
-  TSummary extends { id: string; updatedAt: string },
-  TBranchSummary,
->(input: {
+export function buildSessionGraph<TSummary extends SessionLineageSummary, TBranchSummary>(input: {
   familyBuckets: Iterable<SessionCandidate<TSummary>[]>
   prompts: {
     skillReviewPrompt: string
