@@ -6,7 +6,6 @@
 import { Brackets, TerminalSquare } from 'lucide-vue-next'
 import { CollapsibleContent, CollapsibleRoot, CollapsibleTrigger } from 'reka-ui'
 import { Button } from '@/components/ui/button'
-import { cn } from '@/lib/utils'
 import type { SessionMessage, ToolCallEntry, ToolMessageViewMode } from '@/types/history'
 import Badge from '../ui/badge/Badge.vue'
 

@@ -1,9 +1,8 @@
 /**
- * 负责：声明会话历史查看相关路由。
+ * 负责：声明会话历史与技能管理相关路由。
  * 不负责：页面级业务逻辑与状态管理。
  */
 import { createRouter, createWebHistory } from 'vue-router'
-import SessionHistoryView from '@/views/SessionHistoryView.vue'
 
 export const router = createRouter({
   history: createWebHistory(),
@@ -15,7 +14,12 @@ export const router = createRouter({
     {
       path: '/sessions/:sessionId?',
       name: 'sessions',
-      component: SessionHistoryView,
+      component: () => import('@/views/SessionHistoryView.vue'),
+    },
+    {
+      path: '/skills',
+      name: 'skills',
+      component: () => import('@/views/SkillManagementView.vue'),
     },
   ],
 })

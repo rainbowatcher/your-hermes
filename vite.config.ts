@@ -3,11 +3,15 @@ import { fileURLToPath } from 'node:url'
 import vue from '@vitejs/plugin-vue'
 import tailwindcss from '@tailwindcss/vite'
 import { playwright } from '@vitest/browser-playwright'
-import { defineConfig } from 'vitest/config'
+import { defineConfig, type UserConfig } from 'vite'
 import vueDevTools from 'vite-plugin-vue-devtools'
 import { handleHermesApiRequest, sendServerError } from './server/api/hermes-api.ts'
 
 const frontendPort = Number(process.env.FRONTEND_PORT || '4175')
+
+type VitestInlineConfig = UserConfig & {
+  test?: unknown
+}
 
 export default defineConfig({
   plugins: [
@@ -15,7 +19,7 @@ export default defineConfig({
       name: 'hermes-api-dev-middleware',
       configureServer(server) {
         server.middlewares.use(async (req, res, next) => {
-          const urlPath = req.url?.split('?')[0]
+          const urlPath = req.url
           if (!urlPath?.startsWith('/api/')) {
             next()
             return
@@ -71,4 +75,4 @@ export default defineConfig({
       '@': path.resolve(path.dirname(fileURLToPath(import.meta.url)), './src'),
     },
   },
-})
+} as VitestInlineConfig)

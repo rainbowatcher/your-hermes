@@ -392,7 +392,9 @@ GET /api/hermes/skills/detail?path=mlops/inference/llama-cpp
 返回：
 
 ```ts
-{ skill: SkillDetail }
+{
+  skill: SkillDetail
+}
 ```
 
 语义约定：
@@ -580,15 +582,18 @@ anchor 提取规则：
 
 ```markdown
 # Powerpoint Skill
+
 ## Quick Reference
+
 ## Reading Content
+
 ### Editing Workflow
 ```
 
 输出：
 
 ```ts
-[
+;[
   { id: 'powerpoint-skill', depth: 1, text: 'Powerpoint Skill' },
   { id: 'quick-reference', depth: 2, text: 'Quick Reference' },
   { id: 'reading-content', depth: 2, text: 'Reading Content' },
@@ -720,20 +725,24 @@ anchor 提取规则：
 **Objective:** 为服务端 frontmatter 解析建立可靠基础。
 
 **Files:**
+
 - Modify: `package.json`
 - Modify: `bun.lock`（安装后自动更新）
 
 **Steps:**
+
 1. 添加 `gray-matter` 依赖。
 2. 运行安装命令。
 3. 确认 lockfile 更新。
 
 **Run:**
+
 ```bash
 bun add gray-matter
 ```
 
 **Verify:**
+
 ```bash
 bun run build
 ```
@@ -747,15 +756,18 @@ bun run build
 **Objective:** 建立 skills 列表/详情/anchor 的统一前后端类型。
 
 **Files:**
+
 - Create: `src/types/skills.ts`
 - Create: `server/hermes-data/skills/types.ts`
 
 **Steps:**
+
 1. 定义 `SkillSummary`、`SkillDetail`、`SkillLinkedFile`、`SkillAnchorItem`。
 2. 保证字段名与 API 返回一致。
 3. 只保留首版需要字段。
 
 **Verify:**
+
 ```bash
 bun run build
 ```
@@ -767,15 +779,18 @@ bun run build
 **Objective:** 用 `gray-matter` 解析 `SKILL.md`，并产出 title/tags/anchors。
 
 **Files:**
+
 - Create: `server/hermes-data/skills/parse-skill.ts`
 - Create: `server/hermes-data/skills/tests/parse-skill.test.ts`
 
 **Steps:**
+
 1. 写 failing tests，覆盖 frontmatter、title、tags、anchors。
 2. 实现 parser。
 3. 运行 server 测试直到通过。
 
 **Run:**
+
 ```bash
 bun run test:server
 ```
@@ -787,16 +802,19 @@ bun run test:server
 **Objective:** 从真实 skills 目录生成只读 `SkillSummary[]`。
 
 **Files:**
+
 - Create: `server/hermes-data/skills/list-skills.ts`
 - Create: `server/hermes-data/skills/tests/list-skills.test.ts`
 
 **Steps:**
+
 1. 递归扫描 `**/SKILL.md`。
 2. 派生 `relativePath`、`pathSegments`、`category`、`subcategory`。
 3. 统计 linked file 数量。
 4. 确保不暴露绝对路径。
 
 **Run:**
+
 ```bash
 bun run test:server
 ```
@@ -808,16 +826,19 @@ bun run test:server
 **Objective:** 为选中的 skill 返回完整只读详情。
 
 **Files:**
+
 - Create: `server/hermes-data/skills/load-skill-detail.ts`
 - Create: `server/hermes-data/skills/tests/load-skill-detail.test.ts`
 
 **Steps:**
+
 1. 根据 `relativePath` 校验并定位目录。
 2. 读取 `SKILL.md`。
 3. 统计 linked files。
 4. 返回 `SkillDetail`。
 
 **Run:**
+
 ```bash
 bun run test:server
 ```
@@ -829,15 +850,18 @@ bun run test:server
 **Objective:** 暴露 `/api/hermes/skills` 与 `/api/hermes/skills/detail`。
 
 **Files:**
+
 - Modify: `server/api/hermes-api.ts`
 - Modify: `server/api/hermes-api.test.ts`
 
 **Steps:**
+
 1. 增加列表与详情路由。
 2. 实现 400/404/500 分支。
 3. 补 API 测试。
 
 **Run:**
+
 ```bash
 bun run test:server
 ```
@@ -849,16 +873,19 @@ bun run test:server
 **Objective:** 让前端具备加载 skills 列表与详情的状态能力。
 
 **Files:**
+
 - Modify: `src/api/hermes.ts`
 - Create: `src/stores/skills.ts`
 - Create: `src/types/skills.ts`（若未在 Task 2 完成）
 
 **Steps:**
+
 1. 新增 `fetchSkills` / `fetchSkillDetail`。
 2. 新建 `useSkillsStore`。
 3. 实现搜索、选中、详情缓存。
 
 **Verify:**
+
 ```bash
 bun run build
 ```
@@ -870,15 +897,18 @@ bun run build
 **Objective:** 建立技能页面入口与路由同步。
 
 **Files:**
+
 - Modify: `src/router/index.ts`
 - Create: `src/views/SkillManagementView.vue`
 
 **Steps:**
+
 1. 新增 `/skills` 路由。
 2. 页面初始化加载 skills 列表。
 3. `query.path` 与 `selectedPath` 双向同步。
 
 **Verify:**
+
 ```bash
 bun run build
 ```
@@ -890,15 +920,18 @@ bun run build
 **Objective:** 完成左栏列表与搜索交互。
 
 **Files:**
+
 - Create: `src/components/skills/SkillList.vue`
 - Create: `src/components/skills/SkillList.browser.test.ts`
 
 **Steps:**
+
 1. 渲染 summary 列表。
 2. 支持搜索过滤。
 3. 处理加载态、空态、错误态。
 
 **Run:**
+
 ```bash
 bun run test:browser
 ```
@@ -910,17 +943,20 @@ bun run test:browser
 **Objective:** 完成中栏 skill title + description + markdown body 展示。
 
 **Files:**
+
 - Create: `src/components/skills/SkillDetail.vue`
 - Create: `src/components/skills/SkillMarkdownContent.vue`
 - Create: `src/lib/skill-markdown.ts`
 - Create: `src/components/skills/SkillDetail.browser.test.ts`
 
 **Steps:**
+
 1. 渲染 skill 标题与描述。
 2. 用 skill 专用 markdown 渲染正文。
 3. 为标题节点注入 anchor id。
 
 **Run:**
+
 ```bash
 bun run test:browser
 ```
@@ -932,15 +968,18 @@ bun run test:browser
 **Objective:** 展示 frontmatter 元信息与 linked files 索引。
 
 **Files:**
+
 - Create: `src/components/skills/SkillMetadataPanel.vue`
 - Create: `src/components/skills/SkillMetadataPanel.browser.test.ts`
 
 **Steps:**
+
 1. 优先格式化展示常见字段。
 2. 用兜底结构展示未知字段。
 3. 展示 linked files 列表索引。
 
 **Run:**
+
 ```bash
 bun run test:browser
 ```
@@ -952,16 +991,19 @@ bun run test:browser
 **Objective:** 在右栏提供正文标题导航。
 
 **Files:**
+
 - Create: `src/components/skills/SkillAnchorNav.vue`
 - Create: `src/components/skills/SkillAnchorNav.browser.test.ts`
 - Modify: `src/components/skills/SkillDetail.vue`
 
 **Steps:**
+
 1. 渲染 anchor 层级列表。
 2. 点击后滚动定位正文标题。
 3. 若成本可控，再补当前项高亮；否则留到后续。
 
 **Run:**
+
 ```bash
 bun run test:browser
 ```
@@ -973,9 +1015,11 @@ bun run test:browser
 **Objective:** 确保服务端、前端、样式与路由整体通过。
 
 **Files:**
+
 - Modify: 按实际问题修正相关文件
 
 **Run:**
+
 ```bash
 bun run test:server
 bun run test:browser
@@ -992,16 +1036,19 @@ bun run lint
 **Objective:** 在真正实现前，让 Codex 对本计划做一次补漏 review。
 
 **Files:**
+
 - Modify: `.hermes/plans/2026-04-24_160445-skill-management-page.md`（如 review 后需修订）
 
 **Steps:**
+
 1. 使用 Codex CLI 读取当前计划文档。
 2. 要求 review 范围控制、路径准确性、接口设计、anchor 方案与测试遗漏。
 3. 若 Codex 提出有效问题，再更新本计划。
 
 **Run:**
+
 ```bash
-env HOME=/Users/rainbowatcher codex exec "Review the implementation plan in .hermes/plans/2026-04-24_160445-skill-management-page.md. Focus on scope control, file-path accuracy, API design, anchor navigation risks, and missing tests. Return concise review findings in Chinese." 
+env HOME=/Users/rainbowatcher codex exec "Review the implementation plan in .hermes/plans/2026-04-24_160445-skill-management-page.md. Focus on scope control, file-path accuracy, API design, anchor navigation risks, and missing tests. Return concise review findings in Chinese."
 ```
 
 ---
