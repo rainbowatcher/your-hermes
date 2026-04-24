@@ -4,7 +4,7 @@
 
 ## 项目定位
 
-`your-hermes` 是一个本地 Hermes 资源工作台，用于浏览、整理和扩展本机 Hermes 数据。当前核心是会话历史浏览，后续可继续接入 skills、本地配置、资源索引等 Hermes 相关资源。
+`your-hermes` 是一个本地 Hermes 资源工作台，用于浏览、整理和扩展本机 Hermes 数据。当前核心是会话历史浏览，后续可继续接入技能、本地配置、资源索引等 Hermes 相关资源。
 
 ## 技术栈与运行时
 
@@ -22,7 +22,7 @@
 - `src/stores/`：Pinia store。
 - `src/types/`：前端共享类型。
 - `server/`：本地 API、开发服务器、Hermes 数据解析与服务端测试。
-- `server/hermes-data/sessions/`：会话数据读取、canonical source、lineage、tool calls 等领域逻辑。
+- `server/hermes-data/sessions/`：会话数据读取、规范来源、谱系、工具调用等领域逻辑。
 - `docs/analysis/`：分析文档。
 - `dist/`：构建产物；通常不要手改。
 
@@ -49,7 +49,7 @@ bun run fmt:check
 bun run lint
 ```
 
-也可以使用 Vite+ wrapper：
+也可以使用 Vite+ 包装命令：
 
 ```bash
 vp install
@@ -75,7 +75,7 @@ vp test
 - 浏览器组件测试：`bun run test:browser`。
 - 全量测试：`bun run test`。
 - 类型、构建与格式/静态检查：根据改动范围运行 `bun run build`、`bun run lint`、`bun run fmt:check`。
-- 对 Hermes 会话数据处理的改动，应覆盖：缺失字段、重复/分支关系、canonical source、JSONL 消息流与工具调用等边界。
+- 对 Hermes 会话数据处理的改动，应覆盖：缺失字段、重复/分支关系、规范来源、JSONL 消息流与工具调用等边界。
 - 避免依赖真实用户数据的脆弱断言；测试中使用最小化 fixture 或临时目录。
 
 ## 代码约定
@@ -91,7 +91,7 @@ vp test
 
 - 优先复用 `src/components/ui/` 中已有组件和变体。
 - 修改 UI 组件时遵守 `src/components/ui/AGENTS.md`。
-- 保持键盘可访问性、语义化结构、合理的 loading / empty / error 状态。
+- 保持键盘可访问性、语义化结构、合理的加载 / 空内容 / 错误状态。
 - 会话和消息列表可能很长，避免引入明显的重复重渲染或同步重计算。
 
 ## 本地 API 约定
