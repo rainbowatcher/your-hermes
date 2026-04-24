@@ -20,10 +20,11 @@ const filesMock = vi.hoisted(() => ({
 
 vi.mock('./hermes-data/sessions/files.ts', () => filesMock)
 
-import { loadSessionSummaries } from './hermes-sessions'
+import { clearSessionCacheForTest, loadSessionSummaries } from './hermes-sessions'
 
 describe('Hermes session summaries', () => {
   beforeEach(() => {
+    clearSessionCacheForTest()
     filesMock.loadIndexMap.mockReset()
     filesMock.listSessionFiles.mockReset()
     filesMock.readJsonFile.mockReset()
@@ -73,5 +74,27 @@ describe('Hermes session summaries', () => {
     expect(sessions).toHaveLength(1)
     expect(sessions[0].id).toBe('root')
     expect(sessions[0].branchCount).toBe(1)
+  })
+
+  test('消息内容为 input_text 数组时仍能返回会话列表', async () => {
+    filesMock.loadIndexMap.mockResolvedValue({})
+    filesMock.listSessionFiles.mockResolvedValue(['session_withauth.json'])
+    filesMock.fileExists.mockResolvedValue(false)
+    filesMock.readJsonFile.mockResolvedValueOnce({
+      session_id: 'withauth',
+      platform: 'cli',
+      session_start: '2026-04-24T10:00:00.000Z',
+      last_updated: '2026-04-24T10:01:00.000Z',
+      messages: [
+        { role: 'user', content: [{ type: 'input_text', text: 'hi' }] },
+        { role: 'assistant', content: 'hello' },
+      ],
+    })
+
+    const sessions = await loadSessionSummaries()
+
+    expect(sessions).toHaveLength(1)
+    expect(sessions[0].id).toBe('withauth')
+    expect(sessions[0].title).toBe('hi')
   })
 })

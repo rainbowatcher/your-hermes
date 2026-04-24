@@ -64,7 +64,7 @@ interface HermesIndexEntry {
 
 interface RawHermesMessage {
   role?: string
-  content?: string | null
+  content?: unknown
 }
 
 interface HermesSessionFile {
@@ -163,8 +163,30 @@ type SessionGraphRecord = SessionGraph<SessionSummary, SessionBranchSummary>
 
 let listCache: { loadedAt: number; graph: SessionGraphRecord } | null = null
 
-function normalizeText(value: string | null | undefined) {
-  return (value || '').replace(/\s+/g, ' ').trim()
+function normalizeContent(value: unknown): string {
+  if (typeof value === 'string') {
+    return value
+  }
+
+  if (Array.isArray(value)) {
+    return value
+      .map((part) => {
+        if (typeof part === 'string') return part
+        if (part && typeof part === 'object' && 'text' in part) {
+          const text = (part as { text?: unknown }).text
+          return typeof text === 'string' ? text : ''
+        }
+        return ''
+      })
+      .filter(Boolean)
+      .join('\n')
+  }
+
+  return ''
+}
+
+function normalizeText(value: unknown) {
+  return normalizeContent(value).replace(/\s+/g, ' ').trim()
 }
 
 function truncate(value: string, max = 120) {
@@ -209,8 +231,9 @@ function deriveTitle(indexEntry: HermesIndexEntry | undefined, sessionFile: Herm
   const firstUser = sessionFile.messages?.find(
     (message) => message.role === 'user' && normalizeText(message.content),
   )
-  if (firstUser?.content) {
-    return truncate(normalizeText(firstUser.content), 72)
+  const firstUserContent = normalizeText(firstUser?.content)
+  if (firstUserContent) {
+    return truncate(firstUserContent, 72)
   }
 
   return sessionFile.session_id
@@ -236,7 +259,8 @@ function deriveSummary(sessionFile: HermesSessionFile) {
     return (message.role === 'assistant' || message.role === 'user') && content
   })
 
-  return latest?.content ? truncate(normalizeText(latest.content), 120) : '暂无可展示的摘要。'
+  const latestContent = normalizeText(latest?.content)
+  return latestContent ? truncate(latestContent, 120) : '暂无可展示的摘要。'
 }
 
 function detectIssue(content: string) {
@@ -316,7 +340,8 @@ function summarizeSession(
   )
   let issueCount = 0
   for (const message of toolMessages) {
-    if (message.content && detectIssue(message.content)) {
+    const content = normalizeContent(message.content)
+    if (content && detectIssue(content)) {
       issueCount += 1
     }
   }
@@ -432,6 +457,10 @@ async function loadSessionGraph(): Promise<SessionGraphRecord> {
   })
   listCache = { loadedAt: Date.now(), graph }
   return graph
+}
+
+export function clearSessionCacheForTest() {
+  listCache = null
 }
 
 export async function loadSessionSummaries() {
@@ -562,7 +591,7 @@ export async function loadSessionDetail(sessionId: string): Promise<SessionDetai
 
     for (const [index, message] of (sessionFile?.messages || []).entries()) {
       if (!isMessageRole(message.role)) continue
-      const content = message.content || ''
+      const content = normalizeContent(message.content)
       const normalizedContent = normalizeText(content)
       if (
         (message.role === 'assistant' || message.role === 'user' || message.role === 'system') &&

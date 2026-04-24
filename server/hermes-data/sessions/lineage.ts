@@ -12,7 +12,7 @@ export type SessionBranchKind =
 
 export interface RawComparableMessage {
   role?: string
-  content?: string | null
+  content?: unknown
 }
 
 export interface SessionLineageSummary {
@@ -43,8 +43,30 @@ export interface SessionFamily<TSummary extends SessionLineageSummary> {
   duplicates: SessionCandidate<TSummary>[]
 }
 
-function normalizeText(value: string | null | undefined) {
-  return (value || '').replace(/\s+/g, ' ').trim()
+function normalizeContent(value: unknown): string {
+  if (typeof value === 'string') {
+    return value
+  }
+
+  if (Array.isArray(value)) {
+    return value
+      .map((part) => {
+        if (typeof part === 'string') return part
+        if (part && typeof part === 'object' && 'text' in part) {
+          const text = (part as { text?: unknown }).text
+          return typeof text === 'string' ? text : ''
+        }
+        return ''
+      })
+      .filter(Boolean)
+      .join('\n')
+  }
+
+  return ''
+}
+
+function normalizeText(value: unknown) {
+  return normalizeContent(value).replace(/\s+/g, ' ').trim()
 }
 
 export function buildMessageKey(message: RawComparableMessage) {
