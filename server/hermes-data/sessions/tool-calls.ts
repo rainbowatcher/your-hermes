@@ -20,6 +20,7 @@ export interface ToolCallEntryRecord {
   toolArguments?: string
   toolCallId?: string
   hasError?: boolean
+  errorDetail?: string
 }
 
 export interface ToolGroupMessageRecord {
@@ -33,6 +34,26 @@ export interface ToolGroupMessageRecord {
   collapsedByDefault?: boolean
   toolCalls: ToolCallEntryRecord[]
 }
+
+export interface ToolCallIssueRecord {
+  hasError: boolean
+  errorDetail?: string
+}
+
+const DUPLICATE_TOOL_OUTPUT_PLACEHOLDER = '[Duplicate tool output — same content as a more recent call]'
+const EXPECTED_EXIT_CODE_MEANING_RE = /\b(?:not an error|expected)\b/i
+const LEGACY_EXPECTED_EXIT_CODES = new Map<string, Set<number>>([
+  ['grep', new Set([1])],
+  ['egrep', new Set([1])],
+  ['fgrep', new Set([1])],
+  ['rg', new Set([1])],
+  ['ag', new Set([1])],
+  ['ack', new Set([1])],
+  ['diff', new Set([1])],
+  ['colordiff', new Set([1])],
+  ['test', new Set([1])],
+  ['[', new Set([1])],
+])
 
 function normalizeText(value: string | null | undefined) {
   return (value || '').replace(/\s+/g, ' ').trim()
@@ -48,6 +69,14 @@ function parseJsonSafe<T>(raw: string) {
   } catch {
     return null
   }
+}
+
+function parseJsonRecord(raw: string) {
+  const parsed = parseJsonSafe<unknown>(raw)
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    return null
+  }
+  return parsed as Record<string, unknown>
 }
 
 export function toolCallKind(name: string | undefined): ToolCallKind {
@@ -88,6 +117,195 @@ function toolContentByKind(parsed: Record<string, unknown> | null, kind: ToolCal
   }
 
   return segments.join('\n\n').trim()
+}
+
+function stringifyErrorValue(value: unknown) {
+  if (typeof value === 'string') {
+    const normalized = value.trim()
+    return normalized || undefined
+  }
+
+  if (Array.isArray(value)) {
+    return value.length ? JSON.stringify(value, null, 2) : undefined
+  }
+
+  if (value && typeof value === 'object') {
+    return Object.keys(value).length ? JSON.stringify(value, null, 2) : undefined
+  }
+
+  return undefined
+}
+
+function summarizeText(value: string | undefined, maxLines = 3, maxLength = 320) {
+  if (!value) {
+    return undefined
+  }
+
+  const lines = value
+    .split('\n')
+    .map((line) => line.trimEnd())
+    .filter((line) => line.trim())
+  if (!lines.length) {
+    return undefined
+  }
+
+  const summary = lines.slice(0, maxLines).join('\n').trim()
+  return truncate(summary, maxLength)
+}
+
+function extractCommandBase(argumentsText: string | undefined) {
+  const args = parseToolArguments(argumentsText)
+  const command = typeof args?.command === 'string' ? args.command.trim() : ''
+  if (!command) {
+    return undefined
+  }
+
+  const segments = command.split(/\s*(?:\|\||&&|[|;])\s*/)
+  const lastSegment = (segments.at(-1) || command).trim()
+  if (!lastSegment) {
+    return undefined
+  }
+
+  const words = lastSegment.split(/\s+/)
+  for (const word of words) {
+    if (word.includes('=') && !word.startsWith('-')) {
+      continue
+    }
+    return word.split('/').at(-1)
+  }
+
+  return undefined
+}
+
+function isLegacyExpectedExitCode(name: string | undefined, argumentsText: string | undefined, exitCode: number) {
+  if (name !== 'terminal') {
+    return false
+  }
+
+  const commandBase = extractCommandBase(argumentsText)
+  if (!commandBase) {
+    return false
+  }
+
+  return LEGACY_EXPECTED_EXIT_CODES.get(commandBase)?.has(exitCode) || false
+}
+
+function extractNestedOutputIssue(output: unknown) {
+  if (typeof output !== 'string' || !output.trim()) {
+    return undefined
+  }
+
+  const nested = parseJsonRecord(output)
+  if (!nested) {
+    return undefined
+  }
+
+  const nestedError = stringifyErrorValue(nested.error)
+  if (nestedError) {
+    return nestedError
+  }
+
+  if (nested.status === 'error') {
+    return (
+      summarizeText(typeof nested.message === 'string' ? nested.message : undefined) ||
+      summarizeText(typeof nested.output === 'string' ? nested.output : undefined) ||
+      summarizeText(output)
+    )
+  }
+
+  return undefined
+}
+
+function classifyPlainTextIssue(content: string, name: string | undefined): ToolCallIssueRecord {
+  const normalized = content.trim()
+  if (!normalized || normalized === DUPLICATE_TOOL_OUTPUT_PLACEHOLDER) {
+    return { hasError: false }
+  }
+
+  if ((name === 'terminal' || /^\[terminal\]/i.test(normalized)) && /->\s*exit\s*(-?\d+)\b/i.test(normalized)) {
+    const match = normalized.match(/->\s*exit\s*(-?\d+)\b/i)
+    if (match && Number(match[1]) !== 0) {
+      return { hasError: true, errorDetail: normalized }
+    }
+  }
+
+  if (/^(?:\[[^\]]+\]\s*(?:error|failed)\b|Traceback\b)/i.test(normalized)) {
+    return { hasError: true, errorDetail: normalized }
+  }
+
+  return { hasError: false }
+}
+
+export function classifyToolCallIssue(input: {
+  argumentsText?: string
+  content: string
+  name?: string
+}): ToolCallIssueRecord {
+  const { argumentsText, content, name } = input
+  const parsed = parseJsonRecord(content)
+  if (!parsed) {
+    return classifyPlainTextIssue(content, name)
+  }
+
+  const topLevelError = stringifyErrorValue(parsed.error)
+  if (topLevelError) {
+    return {
+      hasError: true,
+      errorDetail: topLevelError,
+    }
+  }
+
+  if (parsed.success === false) {
+    return {
+      hasError: true,
+      errorDetail:
+        summarizeText(typeof parsed.message === 'string' ? parsed.message : undefined) ||
+        summarizeText(typeof parsed.output === 'string' ? parsed.output : undefined) ||
+        summarizeText(content),
+    }
+  }
+
+  if (parsed.status === 'error') {
+    return {
+      hasError: true,
+      errorDetail:
+        summarizeText(typeof parsed.message === 'string' ? parsed.message : undefined) ||
+        summarizeText(typeof parsed.output === 'string' ? parsed.output : undefined) ||
+        summarizeText(content),
+    }
+  }
+
+  const exitCode = typeof parsed.exit_code === 'number' ? parsed.exit_code : undefined
+  if (exitCode !== undefined && exitCode !== 0) {
+    const exitCodeMeaning =
+      typeof parsed.exit_code_meaning === 'string' ? parsed.exit_code_meaning : undefined
+
+    if (
+      (exitCodeMeaning && EXPECTED_EXIT_CODE_MEANING_RE.test(exitCodeMeaning)) ||
+      isLegacyExpectedExitCode(name, argumentsText, exitCode)
+    ) {
+      return { hasError: false }
+    }
+
+    return {
+      hasError: true,
+      errorDetail:
+        summarizeText(typeof parsed.output === 'string' ? parsed.output : undefined) ||
+        summarizeText(content),
+    }
+  }
+
+  if (exitCode === 0) {
+    const nestedIssue = extractNestedOutputIssue(parsed.output)
+    if (nestedIssue) {
+      return {
+        hasError: true,
+        errorDetail: nestedIssue,
+      }
+    }
+  }
+
+  return { hasError: false }
 }
 
 function deriveToolPreview(
@@ -268,19 +486,22 @@ function deriveToolTitle(name: string, argumentsText: string | undefined) {
 
 export function buildToolCallEntry(input: {
   content: string
-  detectIssue: (content: string) => boolean
   index: number
   meta?: ToolCallMeta
   sessionId: string
   toolCallId?: string
 }): ToolCallEntryRecord {
-  const { content, detectIssue, index, meta, sessionId, toolCallId } = input
-  const parsed = parseJsonSafe<Record<string, unknown>>(content)
+  const { content, index, meta, sessionId, toolCallId } = input
+  const parsed = parseJsonRecord(content)
   const rawJson = parsed ? JSON.stringify(parsed, null, 2) : content
-  const hasError = detectIssue(content)
   const name = meta?.name || 'tool'
   const kind = toolCallKind(name)
   const primaryContent = toolContentByKind(parsed, kind)
+  const issue = classifyToolCallIssue({
+    content,
+    name,
+    argumentsText: meta?.arguments,
+  })
 
   return {
     id: `${sessionId}-tool-call-${index}`,
@@ -292,7 +513,8 @@ export function buildToolCallEntry(input: {
     primaryContent,
     toolArguments: meta?.arguments,
     toolCallId,
-    hasError,
+    hasError: issue.hasError,
+    errorDetail: issue.errorDetail,
   }
 }
 

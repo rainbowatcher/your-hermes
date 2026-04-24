@@ -30,6 +30,7 @@ import {
 import {
   buildToolCallEntry,
   buildToolGroupMessage,
+  classifyToolCallIssue,
   type ToolCallKind as NormalizedToolCallKind,
   type ToolCallMeta,
 } from './hermes-data/sessions/tool-calls.ts'
@@ -65,6 +66,8 @@ interface HermesIndexEntry {
 interface RawHermesMessage {
   role?: string
   content?: unknown
+  tool_call_id?: unknown
+  tool_calls?: unknown
 }
 
 interface HermesSessionFile {
@@ -96,6 +99,7 @@ export interface ToolCallEntry {
   toolArguments?: string
   toolCallId?: string
   hasError?: boolean
+  errorDetail?: string
 }
 
 export interface SessionMessage {
@@ -263,15 +267,71 @@ function deriveSummary(sessionFile: HermesSessionFile) {
   return latestContent ? truncate(latestContent, 120) : '暂无可展示的摘要。'
 }
 
-function detectIssue(content: string) {
-  const parsed = parseJsonSafe<Record<string, unknown>>(content)
-  if (!parsed) {
-    return /\berror\b/i.test(content)
+function collectToolCallMeta(toolCalls: unknown, toolCallMeta: Map<string, ToolCallMeta>) {
+  if (!Array.isArray(toolCalls)) {
+    return
   }
 
-  const errorValue = parsed.error
-  const exitCode = parsed.exit_code
-  return Boolean(errorValue) || (typeof exitCode === 'number' && exitCode !== 0)
+  for (const toolCall of toolCalls) {
+    if (!toolCall || typeof toolCall !== 'object') {
+      continue
+    }
+
+    const record = toolCall as Record<string, unknown>
+    const id =
+      typeof record.call_id === 'string'
+        ? record.call_id
+        : typeof record.id === 'string'
+          ? record.id
+          : null
+    const functionMeta =
+      typeof record.function === 'object' && record.function
+        ? (record.function as Record<string, unknown>)
+        : null
+
+    if (!id || !functionMeta) {
+      continue
+    }
+
+    toolCallMeta.set(id, {
+      name: typeof functionMeta.name === 'string' ? functionMeta.name : 'tool',
+      arguments: typeof functionMeta.arguments === 'string' ? functionMeta.arguments : '',
+    })
+  }
+}
+
+function countToolIssues(messages: HermesSessionFile['messages']) {
+  const toolCallMeta = new Map<string, ToolCallMeta>()
+  let issueCount = 0
+
+  for (const message of messages || []) {
+    if (message.role === 'assistant') {
+      collectToolCallMeta(message.tool_calls, toolCallMeta)
+      continue
+    }
+
+    if (message.role !== 'tool') {
+      continue
+    }
+
+    const content = normalizeContent(message.content)
+    if (!normalizeText(content)) {
+      continue
+    }
+
+    const toolCallId = typeof message.tool_call_id === 'string' ? message.tool_call_id : undefined
+    const meta = toolCallId ? toolCallMeta.get(toolCallId) : undefined
+    const issue = classifyToolCallIssue({
+      content,
+      name: meta?.name,
+      argumentsText: meta?.arguments,
+    })
+    if (issue.hasError) {
+      issueCount += 1
+    }
+  }
+
+  return issueCount
 }
 
 function deriveAvailableRoles(messages: HermesSessionFile['messages']) {
@@ -338,13 +398,7 @@ function summarizeSession(
   const toolMessages = messages.filter(
     (message) => message.role === 'tool' && normalizeText(message.content),
   )
-  let issueCount = 0
-  for (const message of toolMessages) {
-    const content = normalizeContent(message.content)
-    if (content && detectIssue(content)) {
-      issueCount += 1
-    }
-  }
+  const issueCount = countToolIssues(messages)
 
   const canonical = deriveCanonicalSessionFields({
     sessionFile: sessionFile satisfies CanonicalHermesSessionFile,
@@ -505,23 +559,7 @@ export async function loadSessionDetail(sessionId: string): Promise<SessionDetai
       const timestamp = typeof record.timestamp === 'string' ? record.timestamp : summary.updatedAt
 
       if (role === 'assistant' && Array.isArray(record.tool_calls)) {
-        for (const toolCall of record.tool_calls as Array<Record<string, unknown>>) {
-          const id =
-            typeof toolCall.call_id === 'string'
-              ? toolCall.call_id
-              : typeof toolCall.id === 'string'
-                ? toolCall.id
-                : null
-          const functionMeta =
-            typeof toolCall.function === 'object' && toolCall.function
-              ? (toolCall.function as Record<string, unknown>)
-              : null
-          if (!id || !functionMeta) continue
-          toolCallMeta.set(id, {
-            name: typeof functionMeta.name === 'string' ? functionMeta.name : 'tool',
-            arguments: typeof functionMeta.arguments === 'string' ? functionMeta.arguments : '',
-          })
-        }
+        collectToolCallMeta(record.tool_calls, toolCallMeta)
       }
 
       if (role === 'session_meta') continue
@@ -546,9 +584,7 @@ export async function loadSessionDetail(sessionId: string): Promise<SessionDetai
           toolBufferIndex = index
           toolBufferTimestamp = timestamp
         }
-        toolBuffer.push(
-          buildToolCallEntry({ sessionId, index, content, meta, toolCallId, detectIssue }),
-        )
+        toolBuffer.push(buildToolCallEntry({ sessionId, index, content, meta, toolCallId }))
         continue
       }
 
@@ -590,6 +626,9 @@ export async function loadSessionDetail(sessionId: string): Promise<SessionDetai
     }
 
     for (const [index, message] of (sessionFile?.messages || []).entries()) {
+      if (message.role === 'assistant') {
+        collectToolCallMeta(message.tool_calls, toolCallMeta)
+      }
       if (!isMessageRole(message.role)) continue
       const content = normalizeContent(message.content)
       const normalizedContent = normalizeText(content)
@@ -600,6 +639,9 @@ export async function loadSessionDetail(sessionId: string): Promise<SessionDetai
         continue
 
       if (message.role === 'tool') {
+        const toolCallId =
+          typeof message.tool_call_id === 'string' ? message.tool_call_id : undefined
+        const meta = toolCallId ? toolCallMeta.get(toolCallId) : undefined
         if (!toolBuffer.length) {
           toolBufferIndex = index
         }
@@ -608,8 +650,8 @@ export async function loadSessionDetail(sessionId: string): Promise<SessionDetai
             sessionId,
             index,
             content,
-            meta: { name: 'tool', arguments: '' },
-            detectIssue,
+            meta,
+            toolCallId,
           }),
         )
         continue

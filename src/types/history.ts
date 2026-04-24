@@ -35,6 +35,7 @@ export interface ToolCallEntry {
   toolArguments?: string
   toolCallId?: string
   hasError?: boolean
+  errorDetail?: string
 }
 
 export interface SessionMessage {
