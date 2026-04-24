@@ -4,12 +4,15 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "vp dev",
-    "build": "vue-tsc -b && vp build",
-    "preview": "vp preview",
-    "test": "vp test",
-    "test:server": "vp test --project server",
-    "test:browser": "vp test --project browser"
+    "dev": "vite",
+    "build": "vue-tsc -b && vite build",
+    "preview": "vite preview",
+    "test": "vitest",
+    "test:server": "vitest --project server",
+    "test:browser": "vitest --project browser",
+    "fmt": "oxfmt --write .",
+    "fmt:check": "oxfmt --check .",
+    "lint": "oxlint --deny-warnings --vue-plugin --vitest-plugin --node-plugin ."
   },
   "dependencies": {
     "@vueuse/core": "^14.2.1",
@@ -28,20 +31,21 @@
   "devDependencies": {
     "@tailwindcss/vite": "^4.2.2",
     "@types/node": "^24.12.2",
-    "@vitejs/plugin-vue": "^6.0.5",
+    "@vitejs/plugin-vue": "^6.0.6",
+    "@vitest/browser": "^4.1.5",
+    "@vitest/browser-playwright": "^4.1.5",
+    "@vitest/coverage-v8": "^4.1.5",
     "@vue/tsconfig": "^0.9.1",
+    "oxfmt": "^0.46.0",
+    "oxlint": "^1.61.0",
     "playwright": "^1.59.1",
     "tailwindcss": "^4.2.2",
     "typescript": "~6.0.2",
-    "vite": "npm:@voidzero-dev/vite-plus-core@latest",
+    "vite": "^7.2.7",
     "vite-plugin-vue-devtools": "^8.1.1",
-    "vite-plus": "latest",
+    "vitest": "^4.1.5",
     "vitest-browser-vue": "^2.1.0",
     "vue-tsc": "^3.2.6"
-  },
-  "overrides": {
-    "vite": "npm:@voidzero-dev/vite-plus-core@latest",
-    "vitest": "npm:@voidzero-dev/vite-plus-test@latest"
   },
   "packageManager": "bun@1.3.12"
 }

@@ -41,7 +41,7 @@ startProcess('bun', ['--watch', 'server/app.ts'], {
   NODE_ENV: 'development',
 })
 
-startProcess('vp', ['dev', '--host', '127.0.0.1', '--port', frontendPort], {
+startProcess('bun', ['x', 'vite', '--host', '127.0.0.1', '--port', frontendPort], {
   ...process.env,
   FRONTEND_PORT: frontendPort,
 })

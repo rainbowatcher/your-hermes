@@ -2,7 +2,7 @@
  * 负责：验证 Hermes API 路由在开发服务器内可直接处理。
  * 不负责：独立 HTTP 服务监听与前端界面行为。
  */
-import { describe, expect, test } from 'vite-plus/test'
+import { describe, expect, test } from 'vitest'
 import { handleHermesApiRequest } from './hermes-api'
 import viteConfig from '../../vite.config'
 

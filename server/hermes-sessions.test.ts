@@ -2,16 +2,20 @@
  * 负责：验证 Hermes sessions 加载流程关键回归。
  * 不负责：真实文件系统集成与 HTTP 路由测试。
  */
-import { beforeEach, describe, expect, test, vi } from 'vite-plus/test'
+import { beforeEach, describe, expect, test, vi } from 'vitest'
 
 const filesMock = vi.hoisted(() => ({
-  loadIndexMap: vi.fn(),
-  listSessionFiles: vi.fn(),
-  readJsonFile: vi.fn(),
-  fileExists: vi.fn(),
-  sessionFilePath: vi.fn((fileName: string) => fileName),
-  sessionJsonFilePath: vi.fn((sessionId: string) => `${sessionId}.json`),
-  sessionJsonlFilePath: vi.fn((sessionId: string) => `${sessionId}.jsonl`),
+  loadIndexMap: vi.fn<() => Promise<Record<string, unknown>>>(),
+  listSessionFiles: vi.fn<() => Promise<string[]>>(),
+  readJsonFile: vi.fn<() => Promise<unknown>>(),
+  fileExists: vi.fn<() => Promise<boolean>>(),
+  sessionFilePath: vi.fn<(fileName: string) => string>((fileName: string) => fileName),
+  sessionJsonFilePath: vi.fn<(sessionId: string) => string>(
+    (sessionId: string) => `${sessionId}.json`,
+  ),
+  sessionJsonlFilePath: vi.fn<(sessionId: string) => string>(
+    (sessionId: string) => `${sessionId}.jsonl`,
+  ),
 }))
 
 vi.mock('./hermes-data/sessions/files.ts', () => filesMock)

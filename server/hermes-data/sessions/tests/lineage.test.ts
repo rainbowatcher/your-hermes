@@ -2,7 +2,7 @@
  * 负责：验证会话 lineage / family 识别规则。
  * 不负责：文件读取集成与 Vite API 挂载。
  */
-import { describe, expect, test } from 'vite-plus/test'
+import { describe, expect, test } from 'vitest'
 import {
   branchKindLabel,
   buildFamilies,

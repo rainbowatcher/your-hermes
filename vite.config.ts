@@ -2,18 +2,14 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import vue from '@vitejs/plugin-vue'
 import tailwindcss from '@tailwindcss/vite'
-import { playwright } from '@voidzero-dev/vite-plus-test/browser/providers/playwright'
-import { defineConfig } from 'vite-plus'
+import { playwright } from '@vitest/browser-playwright'
+import { defineConfig } from 'vitest/config'
 import vueDevTools from 'vite-plugin-vue-devtools'
 import { handleHermesApiRequest, sendServerError } from './server/api/hermes-api.ts'
 
 const frontendPort = Number(process.env.FRONTEND_PORT || '4175')
 
 export default defineConfig({
-  fmt: {
-    semi: false,
-    singleQuote: true,
-  },
   plugins: [
     {
       name: 'hermes-api-dev-middleware',
