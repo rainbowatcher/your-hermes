@@ -20,7 +20,11 @@ const filesMock = vi.hoisted(() => ({
 
 vi.mock('./hermes-data/sessions/files.ts', () => filesMock)
 
-import { clearSessionCacheForTest, loadSessionSummaries } from './hermes-sessions'
+import {
+  clearSessionCacheForTest,
+  loadSessionDetail,
+  loadSessionSummaries,
+} from './hermes-sessions'
 
 describe('Hermes session summaries', () => {
   beforeEach(() => {
@@ -96,5 +100,104 @@ describe('Hermes session summaries', () => {
     expect(sessions).toHaveLength(1)
     expect(sessions[0].id).toBe('withauth')
     expect(sessions[0].title).toBe('hi')
+  })
+
+  test('tool 异常统计与详情标记保持一致', async () => {
+    const sessionFile = {
+      session_id: 'tooling',
+      platform: 'cli',
+      session_start: '2026-04-24T10:00:00.000Z',
+      last_updated: '2026-04-24T10:05:00.000Z',
+      messages: [
+        { role: 'user', content: 'check tools' },
+        { role: 'assistant', content: 'running checks' },
+        {
+          role: 'assistant',
+          content: '',
+          tool_calls: [
+            {
+              id: 'call-rg',
+              call_id: 'call-rg',
+              type: 'function',
+              function: {
+                name: 'terminal',
+                arguments: '{"command":"rg missing src"}',
+              },
+            },
+          ],
+        },
+        {
+          role: 'tool',
+          tool_call_id: 'call-rg',
+          content: '{"output":"","exit_code":1,"error":null}',
+        },
+        {
+          role: 'assistant',
+          content: '',
+          tool_calls: [
+            {
+              id: 'call-terminal-fail',
+              call_id: 'call-terminal-fail',
+              type: 'function',
+              function: {
+                name: 'terminal',
+                arguments: '{"command":"git push origin main"}',
+              },
+            },
+          ],
+        },
+        {
+          role: 'tool',
+          tool_call_id: 'call-terminal-fail',
+          content:
+            '{"output":"fatal: unable to get password from user","exit_code":128,"error":null}',
+        },
+        {
+          role: 'assistant',
+          content: '',
+          tool_calls: [
+            {
+              id: 'call-skill-fail',
+              call_id: 'call-skill-fail',
+              type: 'function',
+              function: {
+                name: 'skill_view',
+                arguments: '{"name":"missing-skill"}',
+              },
+            },
+          ],
+        },
+        {
+          role: 'tool',
+          tool_call_id: 'call-skill-fail',
+          content: '{"success":false,"error":"Skill not found"}',
+        },
+      ],
+    }
+
+    filesMock.loadIndexMap.mockResolvedValue({})
+    filesMock.listSessionFiles.mockResolvedValue(['session_tooling.json'])
+    filesMock.fileExists.mockResolvedValue(false)
+    filesMock.readJsonFile.mockResolvedValue(sessionFile)
+
+    const sessions = await loadSessionSummaries()
+    const detail = await loadSessionDetail('tooling')
+
+    expect(sessions).toHaveLength(1)
+    expect(sessions[0].issueCount).toBe(2)
+
+    expect(detail).not.toBeNull()
+    expect(detail?.issueCount).toBe(2)
+    expect(detail?.messages.at(-1)?.role).toBe('tool')
+    expect(detail?.messages.at(-1)?.hasError).toBe(true)
+    expect(detail?.messages.at(-1)?.toolCalls?.map((toolCall) => toolCall.hasError)).toEqual([
+      false,
+      true,
+      true,
+    ])
+    expect(detail?.messages.at(-1)?.toolCalls?.[1].errorDetail).toContain(
+      'fatal: unable to get password from user',
+    )
+    expect(detail?.messages.at(-1)?.toolCalls?.[2].errorDetail).toBe('Skill not found')
   })
 })

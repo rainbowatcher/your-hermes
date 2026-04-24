@@ -40,7 +40,8 @@ export interface ToolCallIssueRecord {
   errorDetail?: string
 }
 
-const DUPLICATE_TOOL_OUTPUT_PLACEHOLDER = '[Duplicate tool output — same content as a more recent call]'
+const DUPLICATE_TOOL_OUTPUT_PLACEHOLDER =
+  '[Duplicate tool output — same content as a more recent call]'
 const EXPECTED_EXIT_CODE_MEANING_RE = /\b(?:not an error|expected)\b/i
 const LEGACY_EXPECTED_EXIT_CODES = new Map<string, Set<number>>([
   ['grep', new Set([1])],
@@ -177,7 +178,11 @@ function extractCommandBase(argumentsText: string | undefined) {
   return undefined
 }
 
-function isLegacyExpectedExitCode(name: string | undefined, argumentsText: string | undefined, exitCode: number) {
+function isLegacyExpectedExitCode(
+  name: string | undefined,
+  argumentsText: string | undefined,
+  exitCode: number,
+) {
   if (name !== 'terminal') {
     return false
   }
@@ -222,7 +227,10 @@ function classifyPlainTextIssue(content: string, name: string | undefined): Tool
     return { hasError: false }
   }
 
-  if ((name === 'terminal' || /^\[terminal\]/i.test(normalized)) && /->\s*exit\s*(-?\d+)\b/i.test(normalized)) {
+  if (
+    (name === 'terminal' || /^\[terminal\]/i.test(normalized)) &&
+    /->\s*exit\s*(-?\d+)\b/i.test(normalized)
+  ) {
     const match = normalized.match(/->\s*exit\s*(-?\d+)\b/i)
     if (match && Number(match[1]) !== 0) {
       return { hasError: true, errorDetail: normalized }
