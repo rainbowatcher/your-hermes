@@ -26,6 +26,13 @@ const memoryResponse = {
   },
 }
 
+const profilesResponse = {
+  profiles: [
+    { id: 'default', label: 'Default', isDefault: true, available: true },
+    { id: 'hetun', label: 'hetun', isDefault: false, available: true },
+  ],
+}
+
 const routes = [
   {
     path: '/sessions/:sessionId?',
@@ -65,7 +72,11 @@ afterEach(() => {
 })
 
 test('MemoryInspectView keeps page identity in the detail header while inspect controls stay outside it', async () => {
-  const fetchMock = vi.fn<(input: RequestInfo | URL) => Promise<Response>>(async () => {
+  const fetchMock = vi.fn<(input: RequestInfo | URL) => Promise<Response>>(async (input) => {
+    const url = String(input)
+    if (url.includes('/api/hermes/profiles')) {
+      return new Response(JSON.stringify(profilesResponse), { status: 200 })
+    }
     return new Response(JSON.stringify(memoryResponse), { status: 200 })
   })
   vi.stubGlobal('fetch', fetchMock)
@@ -75,6 +86,9 @@ test('MemoryInspectView keeps page identity in the detail header while inspect c
   await expect.element(screen.getByRole('heading', { name: 'Memory Inspect' })).toBeVisible()
   await expect.element(screen.getByLabelText('搜索记忆内容')).toBeVisible()
   await expect.element(screen.getByRole('button', { name: '切换到浅色模式' })).toBeVisible()
+  await expect.element(screen.getByRole('combobox', { name: '当前 Hermes profile' })).toHaveValue(
+    'default',
+  )
   await expect.element(screen.getByLabelText('记忆文件').getByText('12 / 2200')).toBeVisible()
   await expect.element(screen.getByText('capacity_limit')).toBeVisible()
   await expect.element(screen.getByLabelText('记忆条目').getByText('第一条记忆')).toBeVisible()
@@ -89,11 +103,53 @@ test('MemoryInspectView keeps page identity in the detail header while inspect c
   expect(detailHeader?.textContent).toContain('Memory Inspect')
   expect(mergedSearch).toBeNull()
   expect(refreshButton?.textContent).toContain('刷新')
-  expect(fetchMock).toHaveBeenCalledWith('/api/hermes/inspect/memory')
+  expect(fetchMock).toHaveBeenCalledWith('/api/hermes/profiles')
+  expect(fetchMock).toHaveBeenCalledWith('/api/hermes/inspect/memory?profile=default')
+})
+
+test('MemoryInspectView reloads inspect data when profile changes', async () => {
+  const fetchMock = vi.fn<(input: RequestInfo | URL) => Promise<Response>>(async (input) => {
+    const url = String(input)
+    if (url.includes('/api/hermes/profiles')) {
+      return new Response(JSON.stringify(profilesResponse), { status: 200 })
+    }
+    if (url.includes('profile=hetun')) {
+      return new Response(
+        JSON.stringify({
+          memory: {
+            ...memoryResponse.memory,
+            rawContent: '河豚记忆',
+            entries: [{ index: 0, content: '河豚记忆', charCount: 4 }],
+          },
+          user: memoryResponse.user,
+        }),
+        { status: 200 },
+      )
+    }
+    return new Response(JSON.stringify(memoryResponse), { status: 200 })
+  })
+  vi.stubGlobal('fetch', fetchMock)
+
+  const screen = await renderMemoryInspect()
+
+  await expect.element(screen.getByRole('combobox', { name: '当前 Hermes profile' })).toHaveValue(
+    'default',
+  )
+  await screen.getByRole('combobox', { name: '当前 Hermes profile' }).selectOptions('hetun')
+
+  await expect.element(screen.getByRole('combobox', { name: '当前 Hermes profile' })).toHaveValue(
+    'hetun',
+  )
+  await expect.element(screen.getByLabelText('记忆条目').getByText('河豚记忆')).toBeVisible()
+  expect(fetchMock).toHaveBeenCalledWith('/api/hermes/inspect/memory?profile=hetun')
 })
 
 test('MemoryInspectView shows missing file fallback', async () => {
-  const fetchMock = vi.fn<(input: RequestInfo | URL) => Promise<Response>>(async () => {
+  const fetchMock = vi.fn<(input: RequestInfo | URL) => Promise<Response>>(async (input) => {
+    const url = String(input)
+    if (url.includes('/api/hermes/profiles')) {
+      return new Response(JSON.stringify(profilesResponse), { status: 200 })
+    }
     return new Response(
       JSON.stringify({
         memory: {

@@ -4,7 +4,7 @@
  */
 import { readFile, stat } from 'node:fs/promises'
 import { join } from 'node:path'
-import { homedir } from 'node:os'
+import type { HermesProfileContext } from './hermes-profiles.ts'
 
 export interface MemoryInspectEntry {
   index: number
@@ -28,6 +28,7 @@ export interface MemoryInspectResponse {
 
 interface LoadMemoryInspectOptions {
   hermesHome?: string
+  profileContext?: Pick<HermesProfileContext, 'memoriesDir'>
 }
 
 const MEMORY_CHAR_LIMIT = 2200
@@ -48,8 +49,12 @@ function resolveCharLimit(kind: keyof MemoryInspectResponse) {
   return kind === 'memory' ? MEMORY_CHAR_LIMIT : USER_CHAR_LIMIT
 }
 
-function resolveHermesHome(hermesHome?: string) {
-  return hermesHome || process.env.HERMES_HOME || join(homedir(), '.hermes')
+function resolveMemoriesDir(options: LoadMemoryInspectOptions = {}) {
+  if (options.profileContext) {
+    return options.profileContext.memoriesDir
+  }
+
+  return join(options.hermesHome || process.env.HERMES_HOME || '', 'memories')
 }
 
 function parseMemoryEntries(rawContent: string): MemoryInspectEntry[] {
@@ -90,9 +95,12 @@ async function loadMemoryFile(
 }
 
 export async function loadMemoryInspect(
+  options: LoadMemoryInspectOptions,
+): Promise<MemoryInspectResponse>
+export async function loadMemoryInspect(
   options: LoadMemoryInspectOptions = {},
 ): Promise<MemoryInspectResponse> {
-  const memoriesDir = join(resolveHermesHome(options.hermesHome), 'memories')
+  const memoriesDir = resolveMemoriesDir(options)
 
   const [memory, user] = await Promise.all([
     loadMemoryFile(join(memoriesDir, 'MEMORY.md'), 'memory'),

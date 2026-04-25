@@ -89,7 +89,7 @@ tags: [llm, inference]
     )
     await mkdir(join(root, 'empty-dir'), { recursive: true })
 
-    const summaries = await loadSkillSummaries(root)
+    const summaries = await loadSkillSummaries({ root })
 
     expect(summaries).toHaveLength(1)
     expect(summaries[0]).toMatchObject({
@@ -120,7 +120,7 @@ description: Slides
     await mkdir(join(skillDir, 'templates'), { recursive: true })
     await writeFile(join(skillDir, 'templates', 'deck.md'), '# Deck')
 
-    const detail = await loadSkillDetail('creative/powerpoint', root)
+    const detail = await loadSkillDetail('creative/powerpoint', { root })
 
     expect(detail).not.toBeNull()
     expect(detail?.frontmatter).toMatchObject({ name: 'powerpoint', description: 'Slides' })
@@ -146,6 +146,22 @@ description: Slides
   test('不存在的 skill 详情返回 null', async () => {
     const root = await createFixtureRoot()
 
-    await expect(loadSkillDetail('missing', root)).resolves.toBeNull()
+    await expect(loadSkillDetail('missing', { root })).resolves.toBeNull()
+  })
+
+  test('按显式 root 读取时不依赖进程级 HERMES_HOME', async () => {
+    const root = await createFixtureRoot()
+    await writeSkill(
+      root,
+      'dogfood',
+      `---
+name: dogfood
+description: Inspect fixture
+---
+# Dogfood
+`,
+    )
+
+    await expect(loadSkillSummaries({ root })).resolves.toHaveLength(1)
   })
 })

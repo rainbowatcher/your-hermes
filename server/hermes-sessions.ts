@@ -34,6 +34,7 @@ import {
   type ToolCallKind as NormalizedToolCallKind,
   type ToolCallMeta,
 } from './hermes-data/sessions/tool-calls.ts'
+import type { HermesProfileContext } from './hermes-profiles.ts'
 
 const CACHE_TTL_MS = 3_000
 
@@ -163,9 +164,22 @@ export interface SessionDetail extends SessionSummary {
   branches: SessionBranchSummary[]
 }
 
+interface LoadSessionOptions {
+  profileContext: Pick<HermesProfileContext, 'summary' | 'sessionsDir'>
+}
+
 type SessionGraphRecord = SessionGraph<SessionSummary, SessionBranchSummary>
 
-let listCache: { loadedAt: number; graph: SessionGraphRecord } | null = null
+type ProfileSessionCacheRecord = {
+  loadedAt: number
+  graph: SessionGraphRecord
+}
+
+const listCache = new Map<string, ProfileSessionCacheRecord>()
+
+function profileCacheKey(profileContext: Pick<HermesProfileContext, 'summary' | 'sessionsDir'>) {
+  return `${profileContext.summary.id}:${profileContext.sessionsDir}`
+}
 
 function normalizeContent(value: unknown): string {
   if (typeof value === 'string') {
@@ -390,6 +404,7 @@ function buildBranchSummary(summary: SessionSummary): SessionBranchSummary {
 }
 
 function summarizeSession(
+  profileContext: Pick<HermesProfileContext, 'sessionsDir'>,
   sessionFile: HermesSessionFile,
   indexEntry: HermesIndexEntry | undefined,
 ): SessionSummary {
@@ -411,7 +426,7 @@ function summarizeSession(
     title: deriveTitle(indexEntry, sessionFile),
     workspace: canonical.workspace,
     channel: deriveChannel(indexEntry),
-    sessionFilePath: sessionJsonlFilePath(sessionFile.session_id),
+    sessionFilePath: `${sessionFile.session_id}.jsonl`,
     status: canonical.status,
     summary: deriveSummary(sessionFile),
     tags: canonical.tags,
@@ -437,14 +452,16 @@ function summarizeSession(
   }
 }
 
-async function loadSessionGraph(): Promise<SessionGraphRecord> {
-  if (listCache && Date.now() - listCache.loadedAt < CACHE_TTL_MS) {
-    return listCache.graph
+async function loadSessionGraph(options: LoadSessionOptions): Promise<SessionGraphRecord> {
+  const cacheKey = profileCacheKey(options.profileContext)
+  const cached = listCache.get(cacheKey)
+  if (cached && Date.now() - cached.loadedAt < CACHE_TTL_MS) {
+    return cached.graph
   }
 
   const [indexMap, sessionFiles] = await Promise.all([
-    loadIndexMap<HermesIndexEntry>(),
-    listSessionFiles(),
+    loadIndexMap<HermesIndexEntry>(options.profileContext.sessionsDir),
+    listSessionFiles(options.profileContext.sessionsDir),
   ])
   const indexBySessionId = new Map<string, HermesIndexEntry>()
 
@@ -457,16 +474,24 @@ async function loadSessionGraph(): Promise<SessionGraphRecord> {
   const familyBuckets = new Map<string, SessionCandidate<SessionSummary>[]>()
 
   for (const file of sessionFiles) {
-    const sessionFile = await readJsonFile<HermesSessionFile>(sessionFilePath(file))
+    const sessionFile = await readJsonFile<HermesSessionFile>(
+      sessionFilePath(options.profileContext.sessionsDir, file),
+    )
     if (!sessionFile?.session_id) continue
     const rawMessages = sessionFile.messages || []
-    const summary = summarizeSession(sessionFile, indexBySessionId.get(sessionFile.session_id))
+    const summary = summarizeSession(
+      options.profileContext,
+      sessionFile,
+      indexBySessionId.get(sessionFile.session_id),
+    )
     const candidate: SessionCandidate<SessionSummary> = {
       summary,
       rawMessages,
       messageKeys: toComparableMessages(rawMessages),
       hasIndex: indexBySessionId.has(sessionFile.session_id),
-      hasJsonl: await fileExists(sessionJsonlFilePath(sessionFile.session_id)),
+      hasJsonl: await fileExists(
+        sessionJsonlFilePath(options.profileContext.sessionsDir, sessionFile.session_id),
+      ),
     }
     const familyKey = coarseFamilyKey(summary, firstUserMessage(rawMessages))
     const bucket = familyBuckets.get(familyKey)
@@ -509,27 +534,30 @@ async function loadSessionGraph(): Promise<SessionGraphRecord> {
       }
     },
   })
-  listCache = { loadedAt: Date.now(), graph }
+  listCache.set(cacheKey, { loadedAt: Date.now(), graph })
   return graph
 }
 
 export function clearSessionCacheForTest() {
-  listCache = null
+  listCache.clear()
 }
 
-export async function loadSessionSummaries() {
-  const graph = await loadSessionGraph()
+export async function loadSessionSummaries(options: LoadSessionOptions) {
+  const graph = await loadSessionGraph(options)
   return graph.sessions
 }
 
-export async function loadSessionDetail(sessionId: string): Promise<SessionDetail | null> {
-  const graph = await loadSessionGraph()
+export async function loadSessionDetail(
+  sessionId: string,
+  options: LoadSessionOptions,
+): Promise<SessionDetail | null> {
+  const graph = await loadSessionGraph(options)
   const summary = graph.summariesById.get(sessionId)
   if (!summary) {
     return null
   }
 
-  const jsonlFile = sessionJsonlFilePath(sessionId)
+  const jsonlFile = sessionJsonlFilePath(options.profileContext.sessionsDir, sessionId)
   const toolCallMeta = new Map<string, ToolCallMeta>()
   const messages: SessionMessage[] = []
 
@@ -608,7 +636,9 @@ export async function loadSessionDetail(sessionId: string): Promise<SessionDetai
   }
 
   if (!messages.length) {
-    const sessionFile = await readJsonFile<HermesSessionFile>(sessionJsonFilePath(sessionId))
+    const sessionFile = await readJsonFile<HermesSessionFile>(
+      sessionJsonFilePath(options.profileContext.sessionsDir, sessionId),
+    )
     const toolBuffer: ToolCallEntry[] = []
     let toolBufferIndex = 0
 

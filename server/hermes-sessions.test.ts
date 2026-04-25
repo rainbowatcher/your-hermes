@@ -5,16 +5,18 @@
 import { beforeEach, describe, expect, test, vi } from 'vitest'
 
 const filesMock = vi.hoisted(() => ({
-  loadIndexMap: vi.fn<() => Promise<Record<string, unknown>>>(),
-  listSessionFiles: vi.fn<() => Promise<string[]>>(),
-  readJsonFile: vi.fn<() => Promise<unknown>>(),
+  loadIndexMap: vi.fn<(sessionsDir: string) => Promise<Record<string, unknown>>>(),
+  listSessionFiles: vi.fn<(sessionsDir: string) => Promise<string[]>>(),
+  readJsonFile: vi.fn<(filePath: string) => Promise<unknown>>(),
   fileExists: vi.fn<() => Promise<boolean>>(),
-  sessionFilePath: vi.fn<(fileName: string) => string>((fileName: string) => fileName),
-  sessionJsonFilePath: vi.fn<(sessionId: string) => string>(
-    (sessionId: string) => `${sessionId}.json`,
+  sessionFilePath: vi.fn<(sessionsDir: string, fileName: string) => string>(
+    (sessionsDir: string, fileName: string) => `${sessionsDir}/${fileName}`,
   ),
-  sessionJsonlFilePath: vi.fn<(sessionId: string) => string>(
-    (sessionId: string) => `${sessionId}.jsonl`,
+  sessionJsonFilePath: vi.fn<(sessionsDir: string, sessionId: string) => string>(
+    (sessionsDir: string, sessionId: string) => `${sessionsDir}/${sessionId}.json`,
+  ),
+  sessionJsonlFilePath: vi.fn<(sessionsDir: string, sessionId: string) => string>(
+    (sessionsDir: string, sessionId: string) => `${sessionsDir}/${sessionId}.jsonl`,
   ),
 }))
 
@@ -26,6 +28,16 @@ import {
   loadSessionSummaries,
 } from './hermes-sessions'
 
+const defaultProfileContext = {
+  summary: { id: 'default', label: 'Default', isDefault: true, available: true },
+  sessionsDir: '/profiles/default/sessions',
+}
+
+const altProfileContext = {
+  summary: { id: 'hetun', label: 'hetun', isDefault: false, available: true },
+  sessionsDir: '/profiles/hetun/sessions',
+}
+
 describe('Hermes session summaries', () => {
   beforeEach(() => {
     clearSessionCacheForTest()
@@ -33,6 +45,9 @@ describe('Hermes session summaries', () => {
     filesMock.listSessionFiles.mockReset()
     filesMock.readJsonFile.mockReset()
     filesMock.fileExists.mockReset()
+    filesMock.sessionFilePath.mockClear()
+    filesMock.sessionJsonFilePath.mockClear()
+    filesMock.sessionJsonlFilePath.mockClear()
   })
 
   test('存在 branch 时仍能返回会话列表', async () => {
@@ -73,7 +88,7 @@ describe('Hermes session summaries', () => {
         ]),
       })
 
-    const sessions = await loadSessionSummaries()
+    const sessions = await loadSessionSummaries({ profileContext: defaultProfileContext })
 
     expect(sessions).toHaveLength(1)
     expect(sessions[0].id).toBe('root')
@@ -95,7 +110,7 @@ describe('Hermes session summaries', () => {
       ],
     })
 
-    const sessions = await loadSessionSummaries()
+    const sessions = await loadSessionSummaries({ profileContext: defaultProfileContext })
 
     expect(sessions).toHaveLength(1)
     expect(sessions[0].id).toBe('withauth')
@@ -180,8 +195,8 @@ describe('Hermes session summaries', () => {
     filesMock.fileExists.mockResolvedValue(false)
     filesMock.readJsonFile.mockResolvedValue(sessionFile)
 
-    const sessions = await loadSessionSummaries()
-    const detail = await loadSessionDetail('tooling')
+    const sessions = await loadSessionSummaries({ profileContext: defaultProfileContext })
+    const detail = await loadSessionDetail('tooling', { profileContext: defaultProfileContext })
 
     expect(sessions).toHaveLength(1)
     expect(sessions[0].issueCount).toBe(2)
@@ -199,5 +214,51 @@ describe('Hermes session summaries', () => {
       'fatal: unable to get password from user',
     )
     expect(detail?.messages.at(-1)?.toolCalls?.[2].errorDetail).toBe('Skill not found')
+  })
+
+  test('sessions cache 按 profile 隔离，避免不同目录串数据', async () => {
+    filesMock.loadIndexMap.mockResolvedValue({})
+    filesMock.listSessionFiles.mockImplementation(async (sessionsDir: string) => {
+      if (sessionsDir === defaultProfileContext.sessionsDir) {
+        return ['session_default.json']
+      }
+      return ['session_alt.json']
+    })
+    filesMock.fileExists.mockResolvedValue(false)
+    filesMock.readJsonFile.mockImplementation(async (filePath: string) => {
+      if (filePath.includes('/profiles/default/sessions/')) {
+        return {
+          session_id: 'default-session',
+          platform: 'cli',
+          session_start: '2026-04-24T10:00:00.000Z',
+          last_updated: '2026-04-24T10:01:00.000Z',
+          messages: [
+            { role: 'user', content: 'default hello' },
+            { role: 'assistant', content: 'default world' },
+          ],
+        }
+      }
+
+      return {
+        session_id: 'alt-session',
+        platform: 'cli',
+        session_start: '2026-04-25T10:00:00.000Z',
+        last_updated: '2026-04-25T10:01:00.000Z',
+        messages: [
+          { role: 'user', content: 'alt hello' },
+          { role: 'assistant', content: 'alt world' },
+        ],
+      }
+    })
+
+    const defaultSessions = await loadSessionSummaries({ profileContext: defaultProfileContext })
+    const altSessions = await loadSessionSummaries({ profileContext: altProfileContext })
+
+    expect(defaultSessions).toHaveLength(1)
+    expect(defaultSessions[0].id).toBe('default-session')
+    expect(altSessions).toHaveLength(1)
+    expect(altSessions[0].id).toBe('alt-session')
+    expect(filesMock.listSessionFiles).toHaveBeenNthCalledWith(1, defaultProfileContext.sessionsDir)
+    expect(filesMock.listSessionFiles).toHaveBeenNthCalledWith(2, altProfileContext.sessionsDir)
   })
 })

@@ -8,8 +8,10 @@ import { useRoute, useRouter } from 'vue-router'
 import AppNavigation from '@/components/AppNavigation.vue'
 import SkillDetail from '@/components/skills/SkillDetail.vue'
 import SkillList from '@/components/skills/SkillList.vue'
+import { useProfileStore } from '@/stores/profile'
 import { useSkillsStore } from '@/stores/skills'
 
+const profileStore = useProfileStore()
 const store = useSkillsStore()
 const route = useRoute()
 const router = useRouter()
@@ -25,15 +27,23 @@ function syncRouteSelection() {
   }
 
   const routePath = currentRoutePath()
-  const targetPath = routePath || store.filteredSkills[0]?.relativePath || null
+  const routeExists = routePath
+    ? store.skills.some((skill) => skill.relativePath === routePath)
+    : false
+  const targetPath = routeExists ? routePath : store.filteredSkills[0]?.relativePath || null
+
   store.setSelectedPath(targetPath)
 
   if (targetPath) {
     void store.loadSkill(targetPath)
   }
 
-  if (!routePath && targetPath) {
-    router.replace({ name: 'skills', query: { path: targetPath } })
+  if (targetPath !== routePath) {
+    if (targetPath) {
+      router.replace({ name: 'skills', query: { path: targetPath } })
+    } else if (routePath) {
+      router.replace({ name: 'skills', query: {} })
+    }
   }
 }
 
@@ -48,6 +58,14 @@ watch(
     syncRouteSelection()
   },
   { immediate: true },
+)
+
+watch(
+  () => profileStore.selectedProfileId,
+  async () => {
+    await store.loadSkills()
+    syncRouteSelection()
+  },
 )
 
 watch(

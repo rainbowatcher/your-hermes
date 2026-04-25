@@ -3,11 +3,12 @@
   不负责：页面内业务筛选、数据加载或详情状态管理。
 -->
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, onMounted } from 'vue'
 import { MoonStar, Search, SunMedium } from 'lucide-vue-next'
 import { RouterLink, useRoute } from 'vue-router'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { useProfileStore } from '@/stores/profile'
 import { useThemeStore } from '@/stores/theme'
 
 interface NavigationItem {
@@ -26,6 +27,7 @@ const emits = defineEmits<{
 }>()
 
 const route = useRoute()
+const profileStore = useProfileStore()
 const theme = useThemeStore()
 
 const items: NavigationItem[] = [
@@ -67,9 +69,21 @@ const resolvedPlaceholder = computed(() => {
 
 const resolvedSearchValue = computed(() => props.searchValue ?? '')
 const showSearch = computed(() => Boolean(activeName.value && props.searchValue !== undefined))
+const selectedProfileId = computed(() => profileStore.selectedProfileId)
+
+onMounted(() => {
+  if (!profileStore.profiles.length && !profileStore.isLoadingProfiles) {
+    void profileStore.loadProfiles()
+  }
+})
 
 function isActive(item: NavigationItem) {
   return activeName.value === item.name
+}
+
+function handleProfileChange(event: Event) {
+  const nextProfileId = (event.target as HTMLSelectElement).value
+  profileStore.setSelectedProfileId(nextProfileId)
 }
 </script>
 
@@ -118,6 +132,20 @@ function isActive(item: NavigationItem) {
             @update:model-value="(value) => emits('update:search', String(value))"
           />
         </div>
+
+        <label class="flex items-center gap-2 text-xs text-muted-foreground">
+          <span class="sr-only">当前 Hermes profile</span>
+          <select
+            :value="selectedProfileId"
+            aria-label="当前 Hermes profile"
+            class="h-8 rounded-md border border-border/70 bg-background px-2 text-xs text-foreground outline-none transition-colors focus:border-ring"
+            @change="handleProfileChange"
+          >
+            <option v-for="profile in profileStore.profiles" :key="profile.id" :value="profile.id">
+              {{ profile.label }}
+            </option>
+          </select>
+        </label>
 
         <Button
           variant="ghost"

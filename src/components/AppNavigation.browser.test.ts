@@ -74,6 +74,7 @@ test('AppNavigation renders as a lightweight app-level top bar with brand identi
     .element(screen.getByLabelText('搜索标题、平台、频道、标签'))
     .toHaveValue('Alpha Session')
   await expect.element(screen.getByRole('button', { name: '切换到浅色模式' })).toBeVisible()
+  await expect.element(screen.getByRole('combobox', { name: '当前 Hermes profile' })).toBeVisible()
 
   await screen.getByRole('link', { name: '技能' }).click()
   expect(router.currentRoute.value.fullPath).toBe('/skills')
@@ -96,6 +97,7 @@ test('AppNavigation keeps active styling lightweight while separating brand and 
   await expect.element(activeItem).toHaveAttribute('aria-current', 'page')
   await expect.element(activeItem).toHaveClass(/border-b-2/)
   await expect.element(activeItem).toHaveClass(/text-foreground/)
+  await expect.element(screen.getByRole('combobox', { name: '当前 Hermes profile' })).toBeVisible()
   await expect
     .element(screen.getByRole('link', { name: '会话' }))
     .toHaveClass(/hover:text-foreground/)

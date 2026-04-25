@@ -3,11 +3,13 @@
  * 不负责：服务端文件解析、Markdown 渲染与路由注册。
  */
 import { defineStore } from 'pinia'
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { fetchSkillDetail, fetchSkills } from '@/api/hermes'
+import { useProfileStore } from '@/stores/profile'
 import type { SkillDetail, SkillSummary } from '@/types/skills'
 
 export const useSkillsStore = defineStore('skills', () => {
+  const profileStore = useProfileStore()
   const skills = ref<SkillSummary[]>([])
   const detailsByPath = ref<Record<string, SkillDetail>>({})
   const selectedPath = ref<string | null>(null)
@@ -58,8 +60,12 @@ export const useSkillsStore = defineStore('skills', () => {
     isLoadingSkills.value = true
     loadError.value = null
     try {
-      const data = await fetchSkills()
+      const data = await fetchSkills(profileStore.selectedProfileId)
       skills.value = data.skills
+      detailsByPath.value = {}
+      if (selectedPath.value && !data.skills.some((skill) => skill.relativePath === selectedPath.value)) {
+        selectedPath.value = null
+      }
     } catch (error) {
       loadError.value = error instanceof Error ? error.message : '加载技能列表失败'
     } finally {
@@ -73,7 +79,7 @@ export const useSkillsStore = defineStore('skills', () => {
     isLoadingDetail.value = true
     loadError.value = null
     try {
-      const data = await fetchSkillDetail(relativePath)
+      const data = await fetchSkillDetail(relativePath, profileStore.selectedProfileId)
       detailsByPath.value = { ...detailsByPath.value, [relativePath]: data.skill }
     } catch (error) {
       loadError.value = error instanceof Error ? error.message : '加载技能详情失败'
@@ -81,6 +87,16 @@ export const useSkillsStore = defineStore('skills', () => {
       isLoadingDetail.value = false
     }
   }
+
+  watch(
+    () => profileStore.selectedProfileId,
+    () => {
+      skills.value = []
+      detailsByPath.value = {}
+      selectedPath.value = null
+      loadError.value = null
+    },
+  )
 
   function setSearch(value: string) {
     search.value = value

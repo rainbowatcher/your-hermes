@@ -9,8 +9,10 @@ import AppNavigation from '@/components/AppNavigation.vue'
 import HistoryToolbar from '@/components/history/HistoryToolbar.vue'
 import SessionDetail from '@/components/history/SessionDetail.vue'
 import SessionList from '@/components/history/SessionList.vue'
+import { useProfileStore } from '@/stores/profile'
 import { useSessionHistoryStore } from '@/stores/session-history'
 
+const profileStore = useProfileStore()
 const store = useSessionHistoryStore()
 const route = useRoute()
 const router = useRouter()
@@ -21,7 +23,8 @@ function syncRouteSelection() {
   }
 
   const sessionId = typeof route.params.sessionId === 'string' ? route.params.sessionId : null
-  const targetId = sessionId || store.filteredSessions[0]?.id || null
+  const routeExists = sessionId ? store.sessions.some((session) => session.id === sessionId) : false
+  const targetId = routeExists ? sessionId : store.filteredSessions[0]?.id || null
 
   store.setSelectedId(targetId)
 
@@ -29,8 +32,12 @@ function syncRouteSelection() {
     void store.loadSession(targetId)
   }
 
-  if (!sessionId && targetId) {
-    router.replace({ name: 'sessions', params: { sessionId: targetId } })
+  if (targetId !== sessionId) {
+    if (targetId) {
+      router.replace({ name: 'sessions', params: { sessionId: targetId } })
+    } else if (sessionId) {
+      router.replace({ name: 'sessions' })
+    }
   }
 }
 
@@ -49,6 +56,14 @@ watch(
     syncRouteSelection()
   },
   { immediate: true },
+)
+
+watch(
+  () => profileStore.selectedProfileId,
+  async () => {
+    await store.loadSessions()
+    syncRouteSelection()
+  },
 )
 
 watch(

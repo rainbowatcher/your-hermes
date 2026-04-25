@@ -2,10 +2,11 @@
  * 负责：管理真实会话历史列表、详情加载、筛选与选中状态。
  * 不负责：服务端文件读取与消息发送。
  */
-import { computed, reactive, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { defineStore } from 'pinia'
 import { useStorage } from '@vueuse/core'
 import { fetchSessionDetail, fetchSessions } from '@/api/hermes'
+import { DEFAULT_PROFILE_ID, useProfileStore } from '@/stores/profile'
 import type {
   MessageRoleFilter,
   SessionDetail,
@@ -43,8 +44,9 @@ function includesKeyword(session: SessionSummary, keyword: string) {
 }
 
 export const useSessionHistoryStore = defineStore('session-history', () => {
+  const profileStore = useProfileStore()
   const sessions = ref<SessionSummary[]>([])
-  const detailMap = reactive<Record<string, SessionDetail>>({})
+  const detailMap = ref<Record<string, SessionDetail>>({})
   const isLoadingSessions = ref(false)
   const isLoadingDetail = ref(false)
   const loadError = ref('')
@@ -52,7 +54,18 @@ export const useSessionHistoryStore = defineStore('session-history', () => {
   const statusFilter = useStorage<SessionStatusFilter>('history.status-filter', 'all')
   const sort = useStorage<SessionSort>('history.sort', 'recent')
   const messageRoleFilter = useStorage<MessageRoleFilter>('history.message-role-filter', 'all')
-  const selectedId = useStorage<string | null>('history.selected-id', null)
+  const selectedIdsByProfile = useStorage<Record<string, string | null>>('history.selected-ids', {
+    [DEFAULT_PROFILE_ID]: null,
+  })
+  const selectedId = computed<string | null>({
+    get: () => selectedIdsByProfile.value[profileStore.selectedProfileId] ?? null,
+    set: (value) => {
+      selectedIdsByProfile.value = {
+        ...selectedIdsByProfile.value,
+        [profileStore.selectedProfileId]: value,
+      }
+    },
+  })
 
   const filteredSessions = computed(() => {
     const filtered = sessions.value.filter((session) => {
@@ -97,7 +110,7 @@ export const useSessionHistoryStore = defineStore('session-history', () => {
     () => sessions.value.find((session) => session.id === selectedId.value) || null,
   )
   const selectedSession = computed(() =>
-    selectedId.value ? detailMap[selectedId.value] || null : null,
+    selectedId.value ? detailMap.value[selectedId.value] || null : null,
   )
   const availableMessageRoles = computed(() => selectedSession.value?.availableRoles || [])
 
@@ -113,10 +126,14 @@ export const useSessionHistoryStore = defineStore('session-history', () => {
     loadError.value = ''
 
     try {
-      const response = await fetchSessions()
+      const response = await fetchSessions(profileStore.selectedProfileId)
       sessions.value = response.sessions
+      detailMap.value = {}
       if (!selectedId.value && response.sessions.length > 0) {
         selectedId.value = response.sessions[0].id
+      }
+      if (selectedId.value && !response.sessions.some((session) => session.id === selectedId.value)) {
+        selectedId.value = response.sessions[0]?.id || null
       }
     } catch (error) {
       loadError.value = error instanceof Error ? error.message : '读取会话列表失败'
@@ -126,17 +143,17 @@ export const useSessionHistoryStore = defineStore('session-history', () => {
   }
 
   async function loadSession(id: string) {
-    if (detailMap[id]) {
-      return detailMap[id]
+    if (detailMap.value[id]) {
+      return detailMap.value[id]
     }
 
     isLoadingDetail.value = true
     loadError.value = ''
 
     try {
-      const response = await fetchSessionDetail(id)
+      const response = await fetchSessionDetail(id, profileStore.selectedProfileId)
       if (response.session) {
-        detailMap[id] = response.session
+        detailMap.value = { ...detailMap.value, [id]: response.session }
         return response.session
       }
       return null
@@ -147,6 +164,15 @@ export const useSessionHistoryStore = defineStore('session-history', () => {
       isLoadingDetail.value = false
     }
   }
+
+  watch(
+    () => profileStore.selectedProfileId,
+    () => {
+      sessions.value = []
+      detailMap.value = {}
+      loadError.value = ''
+    },
+  )
 
   function setSearch(value: string) {
     search.value = value

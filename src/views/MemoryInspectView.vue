@@ -3,13 +3,14 @@
   不负责：编辑记忆、删除记忆、来源追踪或审计 diff。
 -->
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { Database, RefreshCw } from 'lucide-vue-next'
 import AppNavigation from '@/components/AppNavigation.vue'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { fetchMemoryInspect } from '@/api/hermes'
+import { useProfileStore } from '@/stores/profile'
 import { cn } from '@/lib/utils'
 import type { MemoryInspectFile, MemoryInspectResponse } from '@/types/memory'
 
@@ -35,6 +36,7 @@ const sections: MemorySection[] = [
   },
 ]
 
+const profileStore = useProfileStore()
 const inspect = ref<MemoryInspectResponse | null>(null)
 const activeKey = ref<keyof MemoryInspectResponse>('memory')
 const loading = ref(false)
@@ -92,13 +94,24 @@ async function loadInspect() {
   loading.value = true
   error.value = null
   try {
-    inspect.value = await fetchMemoryInspect()
+    inspect.value = await fetchMemoryInspect(profileStore.selectedProfileId)
   } catch (err) {
     error.value = err instanceof Error ? err.message : '加载 memory inspect 失败'
   } finally {
     loading.value = false
   }
 }
+
+watch(
+  () => profileStore.selectedProfileId,
+  () => {
+    inspect.value = null
+    error.value = null
+    contentMode.value = 'entries'
+    activeKey.value = 'memory'
+    void loadInspect()
+  },
+)
 
 onMounted(() => {
   void loadInspect()

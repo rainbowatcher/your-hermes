@@ -3,11 +3,11 @@
  * 不负责：HTTP 路由、前端渲染、skill 写回或 readiness 分析。
  */
 import { readdir, readFile } from 'node:fs/promises'
-import { homedir } from 'node:os'
+import type { HermesProfileContext } from './hermes-profiles.ts'
 import { isAbsolute, join, relative, resolve, sep } from 'node:path'
 import matter from 'gray-matter'
 
-export const DEFAULT_SKILLS_ROOT = join(homedir(), '.hermes', 'skills')
+export const DEFAULT_SKILLS_ROOT = join(process.env.HERMES_HOME || '', 'skills')
 
 export interface SkillAnchor {
   id: string
@@ -133,9 +133,24 @@ export function parseSkillMarkdown(relativePath: string, rawMarkdown: string): P
   }
 }
 
-export function isValidSkillPath(value: string) {
+export interface LoadSkillOptions {
+  root?: string
+  profileContext?: Pick<HermesProfileContext, 'skillsRoot'>
+}
+
+function resolveSkillsRoot(options: LoadSkillOptions = {}) {
+  const root = options.profileContext?.skillsRoot || options.root || DEFAULT_SKILLS_ROOT
+
+  if (!root) {
+    throw new Error('缺少 skills root')
+  }
+
+  return root
+}
+
+export function isValidSkillPath(value: string, options: LoadSkillOptions = {}) {
   try {
-    resolveSkillDirectory(value, DEFAULT_SKILLS_ROOT)
+    resolveSkillDirectory(value, resolveSkillsRoot(options))
     return true
   } catch {
     return false
@@ -233,7 +248,8 @@ async function collectLinkedFiles(
   return nested.flat().sort((left, right) => left.relativePath.localeCompare(right.relativePath))
 }
 
-export async function loadSkillDetail(relativePath: string, root = DEFAULT_SKILLS_ROOT) {
+export async function loadSkillDetail(relativePath: string, options: LoadSkillOptions = {}) {
+  const root = resolveSkillsRoot(options)
   const skillDir = resolveSkillDirectory(relativePath, root)
   let rawMarkdown
   try {
@@ -252,9 +268,10 @@ export async function loadSkillDetail(relativePath: string, root = DEFAULT_SKILL
   } satisfies SkillDetail
 }
 
-export async function loadSkillSummaries(root = DEFAULT_SKILLS_ROOT) {
+export async function loadSkillSummaries(options: LoadSkillOptions = {}) {
+  const root = resolveSkillsRoot(options)
   const relativePaths = await findSkillPaths(root)
-  const details = await Promise.all(relativePaths.map((path) => loadSkillDetail(path, root)))
+  const details = await Promise.all(relativePaths.map((path) => loadSkillDetail(path, { root })))
 
   return details
     .filter((detail): detail is SkillDetail => Boolean(detail))

@@ -23,7 +23,9 @@ describe('Hermes memory loader', () => {
     )
     await writeFile(join(memoriesDir, 'USER.md'), ['偏好 A', '§', '偏好 B'].join('\n'))
 
-    const inspect = await loadMemoryInspect({ hermesHome: root })
+    const inspect = await loadMemoryInspect({
+      profileContext: { hermesHome: root, memoriesDir },
+    })
 
     expect(inspect.memory.exists).toBe(true)
     expect(inspect.memory.rawContent).toContain('第一条记忆')
@@ -47,7 +49,9 @@ describe('Hermes memory loader', () => {
   test('缺失文件时返回 exists false 与空内容', async () => {
     const root = await createFixtureRoot()
 
-    const inspect = await loadMemoryInspect({ hermesHome: root })
+    const inspect = await loadMemoryInspect({
+      profileContext: { hermesHome: root, memoriesDir: join(root, 'memories') },
+    })
 
     expect(inspect.memory).toEqual({
       exists: false,
@@ -73,7 +77,9 @@ describe('Hermes memory loader', () => {
     await mkdir(memoriesDir, { recursive: true })
     await writeFile(join(memoriesDir, 'MEMORY.md'), '')
 
-    const inspect = await loadMemoryInspect({ hermesHome: root })
+    const inspect = await loadMemoryInspect({
+      profileContext: { hermesHome: root, memoriesDir },
+    })
 
     expect(inspect.memory.exists).toBe(true)
     expect(inspect.memory.rawContent).toBe('')
@@ -88,7 +94,9 @@ describe('Hermes memory loader', () => {
     await mkdir(memoriesDir, { recursive: true })
     await writeFile(join(memoriesDir, 'MEMORY.md'), 'Alpha\r\n  §  \r\n\r\nBeta\r\n\t§\r\nGamma')
 
-    const inspect = await loadMemoryInspect({ hermesHome: root })
+    const inspect = await loadMemoryInspect({
+      profileContext: { hermesHome: root, memoriesDir },
+    })
 
     expect(inspect.memory.entries).toEqual([
       { index: 0, content: 'Alpha', charCount: 5 },
