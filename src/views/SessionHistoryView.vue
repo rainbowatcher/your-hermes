@@ -3,18 +3,15 @@
   不负责：服务端文件解析与消息发送。
 -->
 <script setup lang="ts">
-import { MoonStar, SunMedium } from 'lucide-vue-next'
 import { onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import AppNavigation from '@/components/AppNavigation.vue'
 import HistoryToolbar from '@/components/history/HistoryToolbar.vue'
 import SessionDetail from '@/components/history/SessionDetail.vue'
 import SessionList from '@/components/history/SessionList.vue'
-import { Button } from '@/components/ui/button'
 import { useSessionHistoryStore } from '@/stores/session-history'
-import { useThemeStore } from '@/stores/theme'
 
 const store = useSessionHistoryStore()
-const theme = useThemeStore()
 const route = useRoute()
 const router = useRouter()
 
@@ -72,6 +69,13 @@ function openSession(id: string) {
 
 <template>
   <div class="flex h-full min-h-0 flex-col overflow-hidden bg-background text-foreground">
+    <AppNavigation
+      class="shrink-0"
+      :search-value="store.search"
+      search-placeholder="搜索标题、平台、频道、标签"
+      @update:search="store.setSearch"
+    />
+
     <div
       v-if="store.loadError"
       class="border-b border-amber-500/20 bg-amber-500/8 px-5 py-2 text-xs text-amber-100"
@@ -84,20 +88,10 @@ function openSession(id: string) {
         aria-label="会话列表栏"
         class="flex min-h-0 flex-col border-r border-border/70 bg-card/35 xl:min-w-[320px] xl:max-w-90"
       >
-        <div
-          class="flex items-center justify-between gap-2 border-b border-border/70 px-3 py-2 lg:px-4"
-        >
-          <Button
-            variant="ghost"
-            size="sm"
-            :title="theme.isDark ? '切换到浅色模式' : '切换到深色模式'"
-            @click="theme.toggleTheme"
+        <div class="border-b border-border/70 px-3 py-2 lg:px-4">
+          <div
+            class="flex items-center justify-between gap-2 font-mono text-[10px] text-muted-foreground"
           >
-            <MoonStar v-if="theme.isDark" class="size-3.5" />
-            <SunMedium v-else class="size-3.5" />
-          </Button>
-
-          <div class="flex items-center gap-1.5 font-mono text-[10px] text-muted-foreground">
             <span :title="`全部 ${store.stats.total}`">{{ store.stats.total }}</span>
             <span class="text-border">/</span>
             <span :title="`活跃 ${store.stats.active}`">{{ store.stats.active }}</span>

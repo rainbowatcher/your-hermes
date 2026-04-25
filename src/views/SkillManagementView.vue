@@ -5,13 +5,12 @@
 <script setup lang="ts">
 import { onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import AppNavigation from '@/components/AppNavigation.vue'
 import SkillDetail from '@/components/skills/SkillDetail.vue'
 import SkillList from '@/components/skills/SkillList.vue'
 import { useSkillsStore } from '@/stores/skills'
-import { useThemeStore } from '@/stores/theme'
 
 const store = useSkillsStore()
-const theme = useThemeStore()
 const route = useRoute()
 const router = useRouter()
 
@@ -69,6 +68,13 @@ function openSkill(relativePath: string) {
 
 <template>
   <div class="flex h-full min-h-0 flex-col overflow-hidden bg-background text-foreground">
+    <AppNavigation
+      class="shrink-0"
+      :search-value="store.search"
+      search-placeholder="搜索技能名、路径、标签"
+      @update:search="store.setSearch"
+    />
+
     <div
       v-if="store.loadError"
       class="border-b border-amber-500/20 bg-amber-500/8 px-5 py-2 text-xs text-amber-100"
@@ -84,13 +90,9 @@ function openSkill(relativePath: string) {
         @select="openSkill"
       />
       <SkillDetail
-        :is-dark="theme.isDark"
         :is-loading="store.isLoadingDetail"
-        :search="store.search"
         :skill="store.selectedSkill"
         :total="store.skills.length"
-        @toggle-theme="theme.toggleTheme"
-        @update:search="store.setSearch"
       />
     </div>
   </div>

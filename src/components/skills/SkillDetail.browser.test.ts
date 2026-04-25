@@ -28,6 +28,7 @@ test('SkillDetail renders markdown, metadata, anchors and linked files', async (
   const screen = await render(SkillDetail, {
     props: {
       skill: createSkill(),
+      total: 1,
     },
   })
 
@@ -49,6 +50,7 @@ test('SkillDetail anchor click scrolls inside rendered body', async () => {
   const screen = await render(SkillDetail, {
     props: {
       skill: createSkill(),
+      total: 1,
     },
   })
 

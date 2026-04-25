@@ -1,5 +1,6 @@
 import { expect, test } from 'vitest'
 import { render } from 'vitest-browser-vue'
+import { createPinia } from 'pinia'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import App from './App.vue'
 
@@ -45,35 +46,21 @@ async function renderApp(initialPath: string) {
 
   const screen = await render(App, {
     global: {
-      plugins: [router],
+      plugins: [createPinia(), router],
     },
   })
 
   return { router, screen }
 }
 
-test('App wires a lightweight VitePress-inspired top bar above routed content and updates active state across routes', async () => {
-  const { router, screen } = await renderApp('/sessions/session-123')
+test('App only provides the outer shell and leaves page navigation to routed views', async () => {
+  const { screen } = await renderApp('/sessions/session-123')
 
   const appShell = screen.container.firstElementChild
   expect(appShell).not.toBeNull()
   expect(appShell?.className).toContain('bg-background')
-
-  const navigation = screen.getByLabelText('主导航')
-  await expect.element(navigation).toHaveClass(/border-b/)
-  await expect.element(navigation).toHaveClass(/backdrop-blur/)
-  await expect.element(screen.getByText('your-hermes')).toBeVisible()
-  await expect.element(screen.getByText('会话')).toHaveAttribute('aria-current', 'page')
+  expect(screen.container.querySelector('nav[aria-label="主导航"]')).toBeNull()
   await expect.element(screen.getByRole('heading', { name: 'Sessions Stub' })).toBeVisible()
-
-  await screen.getByRole('link', { name: '技能' }).click()
-  await expect.element(screen.getByRole('heading', { name: 'Skills Stub' })).toBeVisible()
-  await expect.element(screen.getByText('技能')).toHaveAttribute('aria-current', 'page')
-  expect(router.currentRoute.value.fullPath).toBe('/skills')
-
-  await router.push('/inspect/memory')
-  await expect.element(screen.getByRole('heading', { name: 'Memory Stub' })).toBeVisible()
-  await expect.element(screen.getByText('记忆')).toHaveAttribute('aria-current', 'page')
 })
 
 test('App uses a screen-height column layout with a shared overflow-hidden content shell', async () => {

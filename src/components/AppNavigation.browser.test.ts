@@ -1,7 +1,9 @@
 import { expect, test } from 'vitest'
 import { render } from 'vitest-browser-vue'
+import { createPinia } from 'pinia'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import AppNavigation from './AppNavigation.vue'
+import { useThemeStore } from '@/stores/theme'
 
 const routes = [
   {
@@ -21,7 +23,10 @@ const routes = [
   },
 ]
 
-async function renderNavigation(initialPath: string) {
+async function renderNavigation(
+  initialPath: string,
+  options: { searchValue?: string; searchPlaceholder?: string } = {},
+) {
   const router = createRouter({
     history: createMemoryHistory(),
     routes,
@@ -31,16 +36,21 @@ async function renderNavigation(initialPath: string) {
   await router.isReady()
 
   const screen = await render(AppNavigation, {
+    props: options,
     global: {
-      plugins: [router],
+      plugins: [createPinia(), router],
     },
   })
 
-  return { router, screen }
+  const theme = useThemeStore()
+
+  return { router, screen, theme }
 }
 
 test('AppNavigation renders as a lightweight app-level top bar with brand identity and preserves current-route context', async () => {
-  const { router, screen } = await renderNavigation('/sessions/session-123')
+  const { router, screen } = await renderNavigation('/sessions/session-123', {
+    searchValue: 'Alpha Session',
+  })
 
   const navigation = screen.container.querySelector('nav[aria-label="主导航"]')
   const navInner = screen.container.querySelector('nav[aria-label="主导航"] > div')
@@ -60,6 +70,10 @@ test('AppNavigation renders as a lightweight app-level top bar with brand identi
   await expect.element(screen.getByText('会话')).toHaveAttribute('aria-current', 'page')
   await expect.element(screen.getByText('技能')).not.toHaveAttribute('aria-current', 'page')
   await expect.element(screen.getByText('记忆')).not.toHaveAttribute('aria-current', 'page')
+  await expect
+    .element(screen.getByLabelText('搜索标题、平台、频道、标签'))
+    .toHaveValue('Alpha Session')
+  await expect.element(screen.getByRole('button', { name: '切换到浅色模式' })).toBeVisible()
 
   await screen.getByRole('link', { name: '技能' }).click()
   expect(router.currentRoute.value.fullPath).toBe('/skills')
@@ -69,8 +83,12 @@ test('AppNavigation renders as a lightweight app-level top bar with brand identi
 })
 
 test('AppNavigation keeps active styling lightweight while separating brand and page navigation', async () => {
-  const { router, screen } = await renderNavigation(
+  const { router, screen, theme } = await renderNavigation(
     '/skills?path=software-development%2Fwriting-plans',
+    {
+      searchValue: 'plan',
+      searchPlaceholder: '搜索技能名、路径、标签',
+    },
   )
 
   const activeItem = screen.getByText('技能')
@@ -81,6 +99,10 @@ test('AppNavigation keeps active styling lightweight while separating brand and 
   await expect
     .element(screen.getByRole('link', { name: '会话' }))
     .toHaveClass(/hover:text-foreground/)
+  await expect.element(screen.getByLabelText('搜索技能名、路径、标签')).toHaveValue('plan')
+
+  await screen.getByRole('button', { name: '切换到浅色模式' }).click()
+  expect(theme.isDark).toBe(false)
 
   await activeItem.click()
 

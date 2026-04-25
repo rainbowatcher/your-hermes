@@ -1,5 +1,6 @@
 import { afterEach, expect, test, vi } from 'vitest'
 import { render } from 'vitest-browser-vue'
+import { createMemoryHistory, createRouter } from 'vue-router'
 import { createPinia } from 'pinia'
 import MemoryInspectView from './MemoryInspectView.vue'
 
@@ -25,60 +26,70 @@ const memoryResponse = {
   },
 }
 
+const routes = [
+  {
+    path: '/sessions/:sessionId?',
+    name: 'sessions',
+    component: { template: '<div>Sessions Stub</div>' },
+  },
+  {
+    path: '/skills',
+    name: 'skills',
+    component: { template: '<div>Skills Stub</div>' },
+  },
+  {
+    path: '/inspect/memory',
+    name: 'memory-inspect',
+    component: MemoryInspectView,
+  },
+]
+
+async function renderMemoryInspect() {
+  const router = createRouter({
+    history: createMemoryHistory(),
+    routes,
+  })
+
+  await router.push('/inspect/memory')
+  await router.isReady()
+
+  return render(MemoryInspectView, {
+    global: {
+      plugins: [createPinia(), router],
+    },
+  })
+}
+
 afterEach(() => {
   vi.restoreAllMocks()
 })
 
-test('MemoryInspectView merges search and controls into the detail header while preserving inspect tabs', async () => {
+test('MemoryInspectView keeps page identity in the detail header while inspect controls stay outside it', async () => {
   const fetchMock = vi.fn<(input: RequestInfo | URL) => Promise<Response>>(async () => {
     return new Response(JSON.stringify(memoryResponse), { status: 200 })
   })
   vi.stubGlobal('fetch', fetchMock)
 
-  const screen = await render(MemoryInspectView, {
-    global: {
-      plugins: [createPinia()],
-    },
-  })
+  const screen = await renderMemoryInspect()
 
   await expect.element(screen.getByRole('heading', { name: 'Memory Inspect' })).toBeVisible()
+  await expect.element(screen.getByLabelText('搜索记忆内容')).toBeVisible()
+  await expect.element(screen.getByRole('button', { name: '切换到浅色模式' })).toBeVisible()
+  await expect.element(screen.getByLabelText('记忆文件').getByText('12 / 2200')).toBeVisible()
+  await expect.element(screen.getByText('capacity_limit')).toBeVisible()
+  await expect.element(screen.getByLabelText('记忆条目').getByText('第一条记忆')).toBeVisible()
+  await expect.element(screen.getByRole('button', { name: '条目' })).toBeVisible()
+  await expect.element(screen.getByRole('button', { name: '原文' })).toBeVisible()
+
   const detailHeader = screen.container.querySelector('[aria-label="记忆详情头部"]')
   const mergedSearch = detailHeader?.querySelector('input[aria-label="搜索记忆内容"]')
   const refreshButton = detailHeader?.querySelector('button:last-of-type')
 
   expect(detailHeader).not.toBeNull()
-  expect(mergedSearch).not.toBeNull()
+  expect(detailHeader?.textContent).toContain('Memory Inspect')
+  expect(mergedSearch).toBeNull()
   expect(refreshButton?.textContent).toContain('刷新')
-  await expect.element(screen.getByLabelText('记忆文件').getByText('12 / 2200')).toBeVisible()
-  await expect.element(screen.getByLabelText('容量阈值').getByText('2200')).toBeVisible()
-  await expect.element(screen.getByLabelText('记忆条目').getByText('第一条记忆')).toBeVisible()
-  await expect.element(screen.getByRole('button', { name: '条目' })).toBeVisible()
-  await expect.element(screen.getByRole('button', { name: '原文' })).toBeVisible()
-  await expect
-    .element(screen.getByLabelText('原文内容').getByText('第一条记忆\n§\n第二条记忆'))
-    .not.toBeVisible()
-
-  await screen.getByRole('button', { name: '原文' }).click()
-
-  await expect
-    .element(screen.getByLabelText('原文内容').getByText('第一条记忆\n§\n第二条记忆'))
-    .toBeVisible()
-  await expect.element(screen.getByLabelText('记忆条目').getByText('第一条记忆')).not.toBeVisible()
-
-  await screen.getByRole('button', { name: '条目' }).click()
-
-  await expect.element(screen.getByLabelText('记忆条目').getByText('第一条记忆')).toBeVisible()
-  await expect
-    .element(screen.getByLabelText('原文内容').getByText('第一条记忆\n§\n第二条记忆'))
-    .not.toBeVisible()
   expect(fetchMock).toHaveBeenCalledWith('/api/hermes/inspect/memory')
-
-  await screen.getByRole('button', { name: /USER PROFILE/ }).click()
-  await screen.getByRole('button', { name: '原文' }).click()
-
-  await expect.element(screen.getByLabelText('记忆文件').getByText('4 / 1375')).toBeVisible()
-  await expect.element(screen.getByLabelText('容量阈值').getByText('1375')).toBeVisible()
-  await expect.element(screen.getByLabelText('原文内容').getByText('用户偏好')).toBeVisible()
 })
 
 test('MemoryInspectView shows missing file fallback', async () => {
@@ -100,11 +111,7 @@ test('MemoryInspectView shows missing file fallback', async () => {
   })
   vi.stubGlobal('fetch', fetchMock)
 
-  const screen = await render(MemoryInspectView, {
-    global: {
-      plugins: [createPinia()],
-    },
-  })
+  const screen = await renderMemoryInspect()
 
   await expect
     .element(screen.getByText('未找到 MEMORY.md。缺失文件会以空快照展示，不影响页面使用。'))

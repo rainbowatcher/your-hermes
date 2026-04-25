@@ -4,14 +4,13 @@
 -->
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { Database, MoonStar, RefreshCw, Search, SunMedium } from 'lucide-vue-next'
+import { Database, RefreshCw } from 'lucide-vue-next'
+import AppNavigation from '@/components/AppNavigation.vue'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { fetchMemoryInspect } from '@/api/hermes'
 import { cn } from '@/lib/utils'
-import { useThemeStore } from '@/stores/theme'
 import type { MemoryInspectFile, MemoryInspectResponse } from '@/types/memory'
 
 interface MemorySection {
@@ -36,7 +35,6 @@ const sections: MemorySection[] = [
   },
 ]
 
-const theme = useThemeStore()
 const inspect = ref<MemoryInspectResponse | null>(null)
 const activeKey = ref<keyof MemoryInspectResponse>('memory')
 const loading = ref(false)
@@ -109,6 +107,13 @@ onMounted(() => {
 
 <template>
   <main class="flex h-full min-h-0 flex-col overflow-hidden bg-background text-foreground">
+    <AppNavigation
+      class="shrink-0"
+      :search-value="searchTerm"
+      search-placeholder="搜索记忆内容"
+      @update:search="searchTerm = $event"
+    />
+
     <div
       v-if="error"
       class="border-b border-destructive/30 bg-destructive/10 px-4 py-2 text-xs text-destructive"
@@ -186,39 +191,6 @@ onMounted(() => {
       <section class="flex min-h-0 flex-1 flex-col bg-background">
         <header aria-label="记忆详情头部" class="border-b border-border/70 px-4 py-3">
           <div class="flex flex-col gap-3">
-            <div class="flex flex-col gap-2 xl:flex-row xl:items-center xl:justify-between">
-              <div class="relative min-w-0 xl:w-96">
-                <Search
-                  class="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground"
-                />
-                <Input
-                  v-model="searchTerm"
-                  class="h-8 pl-8"
-                  placeholder="搜索记忆内容"
-                  aria-label="搜索记忆内容"
-                />
-              </div>
-
-              <div class="flex items-center justify-between gap-2 xl:justify-end">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  :title="theme.isDark ? '切换到浅色模式' : '切换到深色模式'"
-                  @click="theme.toggleTheme"
-                >
-                  <MoonStar v-if="theme.isDark" class="size-3.5" />
-                  <SunMedium v-else class="size-3.5" />
-                </Button>
-                <Badge variant="outline" class="font-mono text-[10px] uppercase tracking-wide">
-                  {{ totalEntries }} entries
-                </Badge>
-                <Button variant="ghost" size="sm" :disabled="loading" @click="loadInspect">
-                  <RefreshCw :class="cn('size-3.5', loading && 'animate-spin')" />
-                  {{ loading ? '刷新中…' : '刷新' }}
-                </Button>
-              </div>
-            </div>
-
             <div class="flex flex-wrap items-start justify-between gap-3">
               <div class="min-w-0">
                 <p class="font-mono text-[10px] uppercase tracking-wide text-muted-foreground">
@@ -229,15 +201,25 @@ onMounted(() => {
                   {{ activeSection.title }} · {{ activeSection.description }}
                 </p>
               </div>
-              <div class="flex flex-wrap gap-1">
-                <Badge variant="secondary" class="font-mono text-[10px]">
-                  {{ activeFile?.exists ? 'exists' : 'missing' }}
+              <div class="flex flex-wrap items-center gap-2">
+                <Badge variant="outline" class="font-mono text-[10px] uppercase tracking-wide">
+                  {{ totalEntries }} entries
                 </Badge>
-                <Badge variant="secondary" class="font-mono text-[10px]">
-                  {{ activeFile?.entries.length ?? 0 }} entries
-                </Badge>
-                <Badge variant="secondary" class="font-mono text-[10px]"> read-only </Badge>
+                <Button variant="ghost" size="sm" :disabled="loading" @click="loadInspect">
+                  <RefreshCw :class="cn('size-3.5', loading && 'animate-spin')" />
+                  {{ loading ? '刷新中…' : '刷新' }}
+                </Button>
               </div>
+            </div>
+
+            <div class="flex flex-wrap gap-1">
+              <Badge variant="secondary" class="font-mono text-[10px]">
+                {{ activeFile?.exists ? 'exists' : 'missing' }}
+              </Badge>
+              <Badge variant="secondary" class="font-mono text-[10px]">
+                {{ activeFile?.entries.length ?? 0 }} entries
+              </Badge>
+              <Badge variant="secondary" class="font-mono text-[10px]"> read-only </Badge>
             </div>
           </div>
         </header>
@@ -318,97 +300,71 @@ onMounted(() => {
                         class="mb-2 flex items-center justify-between gap-2 text-[10px] text-muted-foreground"
                       >
                         <span class="font-mono">#{{ entry.index + 1 }}</span>
-                        <span class="font-mono">{{ entry.charCount }} 字符</span>
+                        <span class="font-mono">{{ entry.charCount }} chars</span>
                       </div>
-                      <p class="whitespace-pre-wrap text-sm leading-6 text-foreground">
+                      <p class="text-sm leading-6 whitespace-pre-wrap text-foreground">
                         {{ entry.content }}
                       </p>
                     </article>
-                    <div
-                      v-if="filteredEntries.length === 0"
-                      class="py-10 text-center text-xs text-muted-foreground"
+                    <p
+                      v-if="!filteredEntries.length"
+                      class="rounded-lg border border-dashed border-border/70 px-4 py-6 text-center text-sm text-muted-foreground"
                     >
-                      当前筛选下没有记忆条目。
-                    </div>
+                      没有匹配“{{ searchTerm }}”的条目。
+                    </p>
                   </section>
 
                   <section
                     v-show="contentMode === 'raw'"
-                    class="rounded-lg border border-border/60 bg-card/35 p-3"
-                    aria-label="原文内容"
+                    aria-label="记忆原文"
+                    class="rounded-lg border border-border/60 bg-black/70 p-4 font-mono text-xs leading-6 text-emerald-100"
                   >
-                    <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
-                      <h2 class="text-xs font-medium text-muted-foreground">Raw Content</h2>
-                      <Badge variant="outline" class="font-mono text-[10px]">
-                        原文 · {{ activeFile.charCount }} 字符
-                      </Badge>
-                    </div>
-                    <pre
-                      class="max-h-[28rem] overflow-auto whitespace-pre-wrap rounded-md bg-muted/20 p-3 text-xs leading-5 text-foreground"
-                      >{{ activeFile.rawContent || '(空)' }}</pre
-                    >
+                    <pre class="whitespace-pre-wrap">{{ activeFile.rawContent || '(空)' }}</pre>
                   </section>
                 </template>
               </div>
             </ScrollArea>
           </div>
 
-          <aside class="min-h-0 overflow-auto rounded-lg border border-border/70 bg-card/35 p-3">
-            <section>
-              <h2 class="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-                Metadata
-              </h2>
-              <div class="mt-2 space-y-2">
-                <div
-                  v-for="entry in metadataEntries"
-                  :key="entry.label"
-                  class="rounded border border-border/60 p-2"
-                >
-                  <p class="font-mono text-[10px] text-muted-foreground">{{ entry.label }}</p>
-                  <pre class="mt-1 whitespace-pre-wrap break-words text-xs text-foreground">{{
-                    entry.value
-                  }}</pre>
-                </div>
-              </div>
-            </section>
+          <aside class="min-h-0 overflow-hidden rounded-lg border border-border/70 bg-card/30">
+            <ScrollArea class="h-full">
+              <div class="space-y-3 p-4">
+                <section>
+                  <p
+                    class="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground/80"
+                  >
+                    Snapshot
+                  </p>
+                  <dl class="mt-3 space-y-2 font-mono text-xs">
+                    <div
+                      v-for="item in metadataEntries"
+                      :key="item.label"
+                      class="rounded-md border border-border/60 bg-muted/15 px-3 py-2"
+                    >
+                      <dt class="text-[10px] uppercase tracking-wide text-muted-foreground">
+                        {{ item.label }}
+                      </dt>
+                      <dd class="mt-1 break-all text-foreground">{{ item.value }}</dd>
+                    </div>
+                  </dl>
+                </section>
 
-            <section class="mt-5" aria-label="容量阈值">
-              <h2 class="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-                Capacity
-              </h2>
-              <div class="mt-2 rounded border border-border/60 p-3">
-                <p class="font-mono text-[10px] text-muted-foreground">char_limit</p>
-                <p class="mt-1 font-mono text-lg font-semibold text-foreground">
-                  {{ activeCharLimit || 'unknown' }}
-                </p>
-                <p class="mt-1 text-[11px] leading-4 text-muted-foreground">
-                  Hermes 会按该阈值控制 {{ activeSection.fileName }} 的可注入容量。
-                </p>
+                <section>
+                  <p
+                    class="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground/80"
+                  >
+                    Notes
+                  </p>
+                  <div class="mt-3 space-y-2 text-xs leading-5 text-muted-foreground">
+                    <p>只读 inspect 直接读取本地 memory/user 文件，用于核对当前注入上下文。</p>
+                    <p>
+                      条目模式展示解析后的 bullets；原文模式保留 markdown 原样，便于复制与排查。
+                    </p>
+                    <p>容量信息基于后端返回的字符统计，接近阈值时应优先清理冗余记忆。</p>
+                  </div>
+                </section>
               </div>
-            </section>
-
-            <section class="mt-5">
-              <h2 class="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-                Scope
-              </h2>
-              <div class="mt-2 space-y-1">
-                <p
-                  class="rounded bg-muted/20 px-2 py-1 font-mono text-[10px] text-muted-foreground"
-                >
-                  local Hermes memory snapshot
-                </p>
-                <p
-                  class="rounded bg-muted/20 px-2 py-1 font-mono text-[10px] text-muted-foreground"
-                >
-                  no absolute paths exposed
-                </p>
-                <p
-                  class="rounded bg-muted/20 px-2 py-1 font-mono text-[10px] text-muted-foreground"
-                >
-                  no edit/delete actions
-                </p>
-              </div>
-            </section>
+            </ScrollArea>
           </aside>
         </div>
       </section>

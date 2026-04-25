@@ -81,14 +81,20 @@ test('SessionHistoryView keeps session filters in the list pane while detail hea
   await expect.element(screen.getByRole('heading', { name: 'Alpha Session' })).toBeVisible()
 
   const listPane = screen.container.querySelector('[aria-label="会话列表栏"]')
-  const searchInput = listPane?.querySelector('input[title="搜索标题、平台、频道、标签"]')
-  const themeButton = listPane?.querySelector('button[title="切换到浅色模式"]')
+  const searchInput = screen.container.querySelector(
+    'nav[aria-label="主导航"] input[aria-label="搜索标题、平台、频道、标签"]',
+  )
+  const themeButton = screen.container.querySelector(
+    'nav[aria-label="主导航"] button[title="切换到浅色模式"]',
+  )
+  const listStats = listPane?.textContent ?? ''
   const sortButton = listPane?.querySelector('button[title="最近更新"]')
 
   expect(listPane).not.toBeNull()
   expect(searchInput).not.toBeNull()
   expect(themeButton).not.toBeNull()
   expect(sortButton).not.toBeNull()
+  expect(listStats).toContain('1')
 
   const detailHeader = screen.container.querySelector('[aria-label="会话详情头部"]')
   expect(detailHeader).not.toBeNull()

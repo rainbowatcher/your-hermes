@@ -42,7 +42,7 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-test('SkillManagementView merges search and theme controls into the detail header', async () => {
+test('SkillManagementView keeps page identity in the detail header while global tools stay in the shared top bar', async () => {
   const fetchMock = vi.fn<(input: RequestInfo | URL) => Promise<Response>>(async (input) => {
     const url = String(input)
     if (url.includes('/api/hermes/skills/detail')) {
@@ -69,13 +69,14 @@ test('SkillManagementView merges search and theme controls into the detail heade
   const themeButton = detailHeader?.querySelector('button[title="切换到浅色模式"]')
 
   expect(detailHeader).not.toBeNull()
-  expect(mergedSearch).not.toBeNull()
-  expect(themeButton).not.toBeNull()
+  expect(detailHeader?.textContent).toContain('Writing Plans')
+  expect(mergedSearch).toBeNull()
+  expect(themeButton).toBeNull()
   expect(fetchMock).toHaveBeenCalled()
   expect(router.currentRoute.value.query.path).toBe('software-development/writing-plans')
 })
 
-test('SkillManagementView keeps merged controls available when no skill is selected', async () => {
+test('SkillManagementView keeps list filtering available even when no skill is selected', async () => {
   const fetchMock = vi.fn<(input: RequestInfo | URL) => Promise<Response>>(async (input) => {
     const url = String(input)
     if (url.includes('/api/hermes/skills/detail')) {
@@ -99,7 +100,7 @@ test('SkillManagementView keeps merged controls available when no skill is selec
   const themeButton = detailHeader.querySelector('button[aria-label="切换到浅色模式"]')
 
   expect(detailHeader.textContent || '').toContain('请选择左侧技能。')
-  expect(themeButton).not.toBeNull()
+  expect(themeButton).toBeNull()
 
   await input.fill('ascii')
 

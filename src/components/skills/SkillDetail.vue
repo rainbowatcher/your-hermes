@@ -4,25 +4,15 @@
 -->
 <script setup lang="ts">
 import { computed, nextTick, ref } from 'vue'
-import { MoonStar, Search, SunMedium } from 'lucide-vue-next'
 import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import SkillMarkdown from '@/components/skills/SkillMarkdown.vue'
 import type { SkillAnchor, SkillDetail as SkillDetailModel } from '@/types/skills'
 
 const props = defineProps<{
-  isDark: boolean
   isLoading?: boolean
-  search: string
   skill: SkillDetailModel | null
   total: number
-}>()
-
-const emits = defineEmits<{
-  (event: 'toggle-theme'): void
-  (event: 'update:search', value: string): void
 }>()
 
 const bodyRef = ref<HTMLElement | null>(null)
@@ -63,41 +53,6 @@ async function jumpToAnchor(anchor: SkillAnchor) {
   <section class="flex min-h-0 flex-col bg-background">
     <header aria-label="技能详情头部" class="border-b border-border/70 px-4 py-3">
       <div class="flex flex-col gap-3">
-        <div class="flex flex-col gap-2 xl:flex-row xl:items-center xl:justify-between">
-          <div class="relative min-w-0 xl:w-96">
-            <Search
-              class="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground"
-            />
-            <Input
-              :model-value="props.search"
-              aria-label="搜索技能名、路径、标签"
-              class="h-8 pl-8"
-              placeholder="搜索技能名、路径、标签"
-              @update:model-value="(value) => emits('update:search', String(value))"
-            />
-          </div>
-
-          <div class="flex items-center justify-between gap-2 xl:justify-end">
-            <Button
-              variant="ghost"
-              size="sm"
-              :aria-label="props.isDark ? '切换到浅色模式' : '切换到深色模式'"
-              :title="props.isDark ? '切换到浅色模式' : '切换到深色模式'"
-              @click="emits('toggle-theme')"
-            >
-              <MoonStar v-if="props.isDark" class="size-3.5" />
-              <SunMedium v-else class="size-3.5" />
-            </Button>
-
-            <div
-              class="font-mono text-[10px] text-muted-foreground"
-              :title="`技能总数 ${props.total}`"
-            >
-              {{ props.total }}
-            </div>
-          </div>
-        </div>
-
         <template v-if="skill">
           <div class="flex flex-wrap items-start justify-between gap-3">
             <div class="min-w-0">
@@ -109,15 +64,23 @@ async function jumpToAnchor(anchor: SkillAnchor) {
                 {{ skill.description }}
               </p>
             </div>
-            <div class="flex flex-wrap gap-1">
-              <Badge
-                v-for="tag in skill.tags"
-                :key="tag"
-                variant="secondary"
-                class="font-mono text-[10px]"
+            <div class="flex items-start gap-3">
+              <div
+                class="font-mono text-[10px] text-muted-foreground"
+                :title="`技能总数 ${props.total}`"
               >
-                {{ tag }}
-              </Badge>
+                {{ props.total }}
+              </div>
+              <div class="flex flex-wrap justify-end gap-1">
+                <Badge
+                  v-for="tag in skill.tags"
+                  :key="tag"
+                  variant="secondary"
+                  class="font-mono text-[10px]"
+                >
+                  {{ tag }}
+                </Badge>
+              </div>
             </div>
           </div>
         </template>
