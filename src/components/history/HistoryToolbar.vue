@@ -26,7 +26,7 @@ const emits = defineEmits<{
 </script>
 
 <template>
-  <div class="border-b border-border/70 px-3 py-2 lg:px-4">
+  <div class="px-3 py-2 lg:px-4">
     <div class="flex flex-col gap-2 xl:flex-row xl:items-center xl:justify-between">
       <div class="flex min-w-0 items-center gap-2">
         <div class="relative min-w-0 flex-1 xl:w-80">

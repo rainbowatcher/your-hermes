@@ -42,25 +42,32 @@ function isActive(item: NavigationItem) {
 <template>
   <nav
     aria-label="主导航"
-    class="border-b border-border/70 bg-background/95 px-3 py-2 backdrop-blur supports-[backdrop-filter]:bg-background/80 lg:px-4"
+    class="border-b border-border/70 bg-background/80 px-3 backdrop-blur supports-[backdrop-filter]:bg-background/60 lg:px-4"
   >
-    <ul class="flex items-center gap-2 overflow-x-auto">
-      <li v-for="item in items" :key="item.name" class="shrink-0">
-        <span
-          v-if="isActive(item)"
-          :aria-current="'page'"
-          class="inline-flex items-center rounded-md bg-primary/10 px-3 py-1.5 text-sm font-medium text-foreground ring-1 ring-border/70"
-        >
-          {{ item.label }}
-        </span>
-        <RouterLink
-          v-else
-          :to="item.to"
-          class="inline-flex items-center rounded-md px-3 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted/70 hover:text-foreground"
-        >
-          {{ item.label }}
-        </RouterLink>
-      </li>
-    </ul>
+    <div class="flex min-h-13 items-center justify-between gap-4">
+      <div class="flex min-w-0 items-center gap-2 py-2">
+        <span class="text-sm font-semibold tracking-tight text-foreground">your-hermes</span>
+        <span class="hidden text-xs text-muted-foreground md:inline">inspect workspace</span>
+      </div>
+
+      <ul class="flex items-center gap-1 overflow-x-auto">
+        <li v-for="item in items" :key="item.name" class="shrink-0">
+          <span
+            v-if="isActive(item)"
+            :aria-current="'page'"
+            class="inline-flex items-center border-b-2 border-foreground px-3 py-3 text-sm font-medium text-foreground"
+          >
+            {{ item.label }}
+          </span>
+          <RouterLink
+            v-else
+            :to="item.to"
+            class="inline-flex items-center border-b-2 border-transparent px-3 py-3 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
+          >
+            {{ item.label }}
+          </RouterLink>
+        </li>
+      </ul>
+    </div>
   </nav>
 </template>

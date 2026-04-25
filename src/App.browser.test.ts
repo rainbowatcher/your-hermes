@@ -3,9 +3,18 @@ import { render } from 'vitest-browser-vue'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import App from './App.vue'
 
-const SessionStub = { template: '<main class="flex h-full min-h-0 flex-col overflow-hidden"><h1>Sessions Stub</h1></main>' }
-const SkillsStub = { template: '<main class="flex h-full min-h-0 flex-col overflow-hidden"><h1>Skills Stub</h1></main>' }
-const MemoryStub = { template: '<main class="flex h-full min-h-0 flex-col overflow-hidden"><h1>Memory Stub</h1></main>' }
+const SessionStub = {
+  template:
+    '<main class="flex h-full min-h-0 flex-col overflow-hidden"><h1>Sessions Stub</h1></main>',
+}
+const SkillsStub = {
+  template:
+    '<main class="flex h-full min-h-0 flex-col overflow-hidden"><h1>Skills Stub</h1></main>',
+}
+const MemoryStub = {
+  template:
+    '<main class="flex h-full min-h-0 flex-col overflow-hidden"><h1>Memory Stub</h1></main>',
+}
 
 const routes = [
   {
@@ -43,9 +52,17 @@ async function renderApp(initialPath: string) {
   return { router, screen }
 }
 
-test('App wires global navigation above routed content and updates active state across routes', async () => {
+test('App wires a lightweight VitePress-inspired top bar above routed content and updates active state across routes', async () => {
   const { router, screen } = await renderApp('/sessions/session-123')
 
+  const appShell = screen.container.firstElementChild
+  expect(appShell).not.toBeNull()
+  expect(appShell?.className).toContain('bg-background')
+
+  const navigation = screen.getByLabelText('主导航')
+  await expect.element(navigation).toHaveClass(/border-b/)
+  await expect.element(navigation).toHaveClass(/backdrop-blur/)
+  await expect.element(screen.getByText('your-hermes')).toBeVisible()
   await expect.element(screen.getByText('会话')).toHaveAttribute('aria-current', 'page')
   await expect.element(screen.getByRole('heading', { name: 'Sessions Stub' })).toBeVisible()
 
@@ -59,7 +76,7 @@ test('App wires global navigation above routed content and updates active state 
   await expect.element(screen.getByText('记忆')).toHaveAttribute('aria-current', 'page')
 })
 
-test('App uses a screen-height column layout with an overflow-hidden content shell', async () => {
+test('App uses a screen-height column layout with a shared overflow-hidden content shell', async () => {
   const { screen } = await renderApp('/skills')
 
   const appShell = screen.container.firstElementChild
