@@ -40,6 +40,7 @@ const activeKey = ref<keyof MemoryInspectResponse>('memory')
 const loading = ref(false)
 const error = ref<string | null>(null)
 const searchTerm = ref('')
+const contentMode = ref<'entries' | 'raw'>('entries')
 
 const activeSection = computed(
   () => sections.find((section) => section.key === activeKey.value) ?? sections[0],
@@ -249,7 +250,54 @@ onMounted(() => {
                   未找到 {{ activeSection.fileName }}。缺失文件会以空快照展示，不影响页面使用。
                 </div>
                 <template v-else-if="activeFile">
-                  <section class="space-y-2" role="region" aria-label="记忆条目">
+                  <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
+                    <div class="inline-flex rounded-md border border-border/70 bg-muted/20 p-1">
+                      <button
+                        :class="
+                          cn(
+                            'rounded px-3 py-1 text-xs font-medium transition-colors',
+                            contentMode === 'entries'
+                              ? 'bg-background text-foreground shadow-sm'
+                              : 'text-muted-foreground hover:text-foreground',
+                          )
+                        "
+                        type="button"
+                        :aria-pressed="contentMode === 'entries'"
+                        @click="contentMode = 'entries'"
+                      >
+                        条目
+                      </button>
+                      <button
+                        :class="
+                          cn(
+                            'rounded px-3 py-1 text-xs font-medium transition-colors',
+                            contentMode === 'raw'
+                              ? 'bg-background text-foreground shadow-sm'
+                              : 'text-muted-foreground hover:text-foreground',
+                          )
+                        "
+                        type="button"
+                        :aria-pressed="contentMode === 'raw'"
+                        @click="contentMode = 'raw'"
+                      >
+                        原文
+                      </button>
+                    </div>
+                    <Badge variant="outline" class="font-mono text-[10px]">
+                      {{
+                        contentMode === 'entries'
+                          ? `${filteredEntries.length} entries`
+                          : `${activeFile.charCount} chars`
+                      }}
+                    </Badge>
+                  </div>
+
+                  <section
+                    v-show="contentMode === 'entries'"
+                    class="space-y-2"
+                    role="region"
+                    aria-label="记忆条目"
+                  >
                     <article
                       v-for="entry in filteredEntries"
                       :key="entry.index"
@@ -274,7 +322,8 @@ onMounted(() => {
                   </section>
 
                   <section
-                    class="mt-3 rounded-lg border border-border/60 bg-card/35 p-3"
+                    v-show="contentMode === 'raw'"
+                    class="rounded-lg border border-border/60 bg-card/35 p-3"
                     aria-label="原文内容"
                   >
                     <div class="mb-3 flex flex-wrap items-center justify-between gap-2">

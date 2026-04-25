@@ -40,16 +40,32 @@ test('MemoryInspectView loads memory inspect snapshot and switches tabs', async 
   await expect.element(screen.getByLabelText('记忆文件').getByText('12 / 2200')).toBeVisible()
   await expect.element(screen.getByLabelText('容量阈值').getByText('2200')).toBeVisible()
   await expect.element(screen.getByLabelText('记忆条目').getByText('第一条记忆')).toBeVisible()
+  await expect.element(screen.getByRole('button', { name: '条目' })).toBeVisible()
+  await expect.element(screen.getByRole('button', { name: '原文' })).toBeVisible()
+  await expect
+    .element(screen.getByLabelText('原文内容').getByText('第一条记忆\n§\n第二条记忆'))
+    .not.toBeVisible()
+
+  await screen.getByRole('button', { name: '原文' }).click()
+
   await expect
     .element(screen.getByLabelText('原文内容').getByText('第一条记忆\n§\n第二条记忆'))
     .toBeVisible()
+  await expect.element(screen.getByLabelText('记忆条目').getByText('第一条记忆')).not.toBeVisible()
+
+  await screen.getByRole('button', { name: '条目' }).click()
+
+  await expect.element(screen.getByLabelText('记忆条目').getByText('第一条记忆')).toBeVisible()
+  await expect
+    .element(screen.getByLabelText('原文内容').getByText('第一条记忆\n§\n第二条记忆'))
+    .not.toBeVisible()
   expect(fetchMock).toHaveBeenCalledWith('/api/hermes/inspect/memory')
 
   await screen.getByRole('button', { name: /USER PROFILE/ }).click()
+  await screen.getByRole('button', { name: '原文' }).click()
 
   await expect.element(screen.getByLabelText('记忆文件').getByText('4 / 1375')).toBeVisible()
   await expect.element(screen.getByLabelText('容量阈值').getByText('1375')).toBeVisible()
-  await expect.element(screen.getByLabelText('记忆条目').getByText('用户偏好')).toBeVisible()
   await expect.element(screen.getByLabelText('原文内容').getByText('用户偏好')).toBeVisible()
 })
 
