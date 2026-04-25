@@ -64,10 +64,18 @@ describe('Hermes API route', () => {
         exists: true,
         rawContent: '记忆',
         charCount: 2,
+        charLimit: 2200,
         updatedAt: '2026-04-25T00:00:00.000Z',
         entries: [],
       },
-      user: { exists: false, rawContent: '', charCount: 0, updatedAt: null, entries: [] },
+      user: {
+        exists: false,
+        rawContent: '',
+        charCount: 0,
+        charLimit: 1375,
+        updatedAt: null,
+        entries: [],
+      },
     })
     const { body, response } = createResponse()
 
@@ -81,10 +89,18 @@ describe('Hermes API route', () => {
         exists: true,
         rawContent: '记忆',
         charCount: 2,
+        charLimit: 2200,
         updatedAt: '2026-04-25T00:00:00.000Z',
         entries: [],
       },
-      user: { exists: false, rawContent: '', charCount: 0, updatedAt: null, entries: [] },
+      user: {
+        exists: false,
+        rawContent: '',
+        charCount: 0,
+        charLimit: 1375,
+        updatedAt: null,
+        entries: [],
+      },
     })
   })
 

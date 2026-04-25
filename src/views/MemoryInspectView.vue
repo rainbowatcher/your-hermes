@@ -18,7 +18,6 @@ interface MemorySection {
   title: string
   description: string
   fileName: string
-  charLimit: number
 }
 
 const sections: MemorySection[] = [
@@ -27,14 +26,12 @@ const sections: MemorySection[] = [
     title: 'MEMORY',
     description: '长期个人笔记，用于跨会话保留环境、项目和流程事实。',
     fileName: 'MEMORY.md',
-    charLimit: 2200,
   },
   {
     key: 'user',
     title: 'USER PROFILE',
     description: '用户画像与偏好，用于减少重复说明。',
     fileName: 'USER.md',
-    charLimit: 1375,
   },
 ]
 
@@ -61,10 +58,13 @@ const filteredEntries = computed(() => {
   return entries.filter((entry) => entry.content.toLowerCase().includes(term))
 })
 
+const activeCharLimit = computed(() => activeFile.value?.charLimit ?? 0)
+
 const metadataEntries = computed(() => [
   { label: 'file', value: activeSection.value.fileName },
   { label: 'status', value: activeFile.value?.exists ? 'exists' : 'missing' },
-  { label: 'characters', value: charUsage(activeFile.value, activeSection.value) },
+  { label: 'characters', value: charUsage(activeFile.value) },
+  { label: 'capacity_limit', value: String(activeCharLimit.value || 'unknown') },
   { label: 'entries', value: String(activeFile.value?.entries.length ?? 0) },
   { label: 'filtered', value: String(filteredEntries.value.length) },
   { label: 'updated_at', value: formatDate(activeFile.value?.updatedAt ?? null) },
@@ -78,9 +78,9 @@ function formatDate(value: string | null) {
   }).format(new Date(value))
 }
 
-function charUsage(file: MemoryInspectFile | null, section: MemorySection) {
-  if (!file) return '0 / ' + section.charLimit
-  return `${file.charCount} / ${section.charLimit}`
+function charUsage(file: MemoryInspectFile | null) {
+  if (!file) return '0 / unknown'
+  return `${file.charCount} / ${file.charLimit}`
 }
 
 function selectSection(key: keyof MemoryInspectResponse) {
@@ -196,7 +196,7 @@ onMounted(() => {
                     <span
                       class="rounded bg-muted px-1 py-0.5 font-mono text-[9px] text-muted-foreground"
                     >
-                      {{ charUsage(inspect?.[section.key] ?? null, section) }}
+                      {{ charUsage(inspect?.[section.key] ?? null) }}
                     </span>
                   </div>
                 </div>
@@ -273,15 +273,21 @@ onMounted(() => {
                     </div>
                   </section>
 
-                  <details class="mt-3 rounded-lg border border-border/60 bg-card/35 p-3">
-                    <summary class="cursor-pointer text-xs font-medium text-muted-foreground">
-                      Raw Content
-                    </summary>
+                  <section
+                    class="mt-3 rounded-lg border border-border/60 bg-card/35 p-3"
+                    aria-label="原文内容"
+                  >
+                    <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
+                      <h2 class="text-xs font-medium text-muted-foreground">Raw Content</h2>
+                      <Badge variant="outline" class="font-mono text-[10px]">
+                        原文 · {{ activeFile.charCount }} 字符
+                      </Badge>
+                    </div>
                     <pre
-                      class="mt-3 overflow-x-auto whitespace-pre-wrap text-xs leading-5 text-foreground"
+                      class="max-h-[28rem] overflow-auto whitespace-pre-wrap rounded-md bg-muted/20 p-3 text-xs leading-5 text-foreground"
                       >{{ activeFile.rawContent || '(空)' }}</pre
                     >
-                  </details>
+                  </section>
                 </template>
               </div>
             </ScrollArea>
@@ -303,6 +309,21 @@ onMounted(() => {
                     entry.value
                   }}</pre>
                 </div>
+              </div>
+            </section>
+
+            <section class="mt-5" aria-label="容量阈值">
+              <h2 class="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                Capacity
+              </h2>
+              <div class="mt-2 rounded border border-border/60 p-3">
+                <p class="font-mono text-[10px] text-muted-foreground">char_limit</p>
+                <p class="mt-1 font-mono text-lg font-semibold text-foreground">
+                  {{ activeCharLimit || 'unknown' }}
+                </p>
+                <p class="mt-1 text-[11px] leading-4 text-muted-foreground">
+                  Hermes 会按该阈值控制 {{ activeSection.fileName }} 的可注入容量。
+                </p>
               </div>
             </section>
 

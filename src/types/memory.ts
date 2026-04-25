@@ -13,6 +13,7 @@ export interface MemoryInspectFile {
   updatedAt: string | null
   rawContent: string
   charCount: number
+  charLimit: number
   entries: MemoryInspectEntry[]
 }
 

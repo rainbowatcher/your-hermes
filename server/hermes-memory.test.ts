@@ -33,9 +33,11 @@ describe('Hermes memory loader', () => {
       { index: 2, content: '第三条记忆', charCount: 5 },
     ])
     expect(inspect.memory.charCount).toBe(inspect.memory.rawContent.length)
+    expect(inspect.memory.charLimit).toBe(2200)
     expect(inspect.memory.updatedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/)
 
     expect(inspect.user.exists).toBe(true)
+    expect(inspect.user.charLimit).toBe(1375)
     expect(inspect.user.entries).toEqual([
       { index: 0, content: '偏好 A', charCount: 4 },
       { index: 1, content: '偏好 B', charCount: 4 },
@@ -52,6 +54,7 @@ describe('Hermes memory loader', () => {
       updatedAt: null,
       rawContent: '',
       charCount: 0,
+      charLimit: 2200,
       entries: [],
     })
     expect(inspect.user).toEqual({
@@ -59,6 +62,7 @@ describe('Hermes memory loader', () => {
       updatedAt: null,
       rawContent: '',
       charCount: 0,
+      charLimit: 1375,
       entries: [],
     })
   })

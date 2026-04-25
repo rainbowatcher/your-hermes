@@ -17,6 +17,7 @@ export interface MemoryInspectFile {
   updatedAt: string | null
   rawContent: string
   charCount: number
+  charLimit: number
   entries: MemoryInspectEntry[]
 }
 
@@ -29,12 +30,22 @@ interface LoadMemoryInspectOptions {
   hermesHome?: string
 }
 
-const EMPTY_MEMORY_FILE: MemoryInspectFile = {
-  exists: false,
-  updatedAt: null,
-  rawContent: '',
-  charCount: 0,
-  entries: [],
+const MEMORY_CHAR_LIMIT = 2200
+const USER_CHAR_LIMIT = 1375
+
+function createEmptyMemoryFile(charLimit: number): MemoryInspectFile {
+  return {
+    exists: false,
+    updatedAt: null,
+    rawContent: '',
+    charCount: 0,
+    charLimit,
+    entries: [],
+  }
+}
+
+function resolveCharLimit(kind: keyof MemoryInspectResponse) {
+  return kind === 'memory' ? MEMORY_CHAR_LIMIT : USER_CHAR_LIMIT
 }
 
 function resolveHermesHome(hermesHome?: string) {
@@ -53,7 +64,12 @@ function parseMemoryEntries(rawContent: string): MemoryInspectEntry[] {
     }))
 }
 
-async function loadMemoryFile(filePath: string): Promise<MemoryInspectFile> {
+async function loadMemoryFile(
+  filePath: string,
+  kind: keyof MemoryInspectResponse,
+): Promise<MemoryInspectFile> {
+  const charLimit = resolveCharLimit(kind)
+
   try {
     const [fileStat, rawContent] = await Promise.all([stat(filePath), readFile(filePath, 'utf8')])
 
@@ -62,11 +78,12 @@ async function loadMemoryFile(filePath: string): Promise<MemoryInspectFile> {
       updatedAt: fileStat.mtime.toISOString(),
       rawContent,
       charCount: rawContent.length,
+      charLimit,
       entries: parseMemoryEntries(rawContent),
     }
   } catch (error) {
     if (error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT') {
-      return { ...EMPTY_MEMORY_FILE }
+      return createEmptyMemoryFile(charLimit)
     }
     throw error
   }
@@ -78,8 +95,8 @@ export async function loadMemoryInspect(
   const memoriesDir = join(resolveHermesHome(options.hermesHome), 'memories')
 
   const [memory, user] = await Promise.all([
-    loadMemoryFile(join(memoriesDir, 'MEMORY.md')),
-    loadMemoryFile(join(memoriesDir, 'USER.md')),
+    loadMemoryFile(join(memoriesDir, 'MEMORY.md'), 'memory'),
+    loadMemoryFile(join(memoriesDir, 'USER.md'), 'user'),
   ])
 
   return { memory, user }
