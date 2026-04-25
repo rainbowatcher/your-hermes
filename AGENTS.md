@@ -39,7 +39,7 @@
 
 ```bash
 bun install
-bun run dev
+HOME=/Users/rainbowatcher bun run dev
 bun run build
 bun run test
 bun run test:server
@@ -48,6 +48,8 @@ bun run fmt
 bun run fmt:check
 bun run lint
 ```
+
+启动开发服务时必须显式声明 `HOME=/Users/rainbowatcher`，例如 `HOME=/Users/rainbowatcher bun run dev -- --host 127.0.0.1`。Hermes 运行环境中的默认 `HOME` 可能指向 `/Users/rainbowatcher/.hermes/home`，会导致本地 Hermes 数据目录解析到错误位置，例如技能目录被解析为不存在的 `/Users/rainbowatcher/.hermes/home/.hermes/skills`。
 
 也可以使用 Vite+ 包装命令：
 
