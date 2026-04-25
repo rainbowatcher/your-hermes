@@ -69,7 +69,7 @@ function openSession(id: string) {
 </script>
 
 <template>
-  <div class="flex h-screen min-h-0 flex-col overflow-hidden bg-background text-foreground">
+  <div class="flex h-full min-h-0 flex-col overflow-hidden bg-background text-foreground">
     <HistoryToolbar
       :active-count="store.stats.active"
       :attention-count="store.stats.attention"

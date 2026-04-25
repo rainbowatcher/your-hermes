@@ -8,6 +8,7 @@ import vueDevTools from 'vite-plugin-vue-devtools'
 import { handleHermesApiRequest, sendServerError } from './server/api/hermes-api.ts'
 
 const frontendPort = Number(process.env.FRONTEND_PORT || '4175')
+const isVitest = process.env.VITEST === 'true'
 
 type VitestInlineConfig = UserConfig & {
   test?: unknown
@@ -37,7 +38,7 @@ export default defineConfig({
       },
     },
     vue(),
-    vueDevTools(),
+    ...(!isVitest ? [vueDevTools()] : []),
     tailwindcss(),
   ],
   test: {
