@@ -35,16 +35,14 @@ test('MemoryInspectView loads memory inspect snapshot and switches tabs', async 
   const screen = await render(MemoryInspectView)
 
   await expect.element(screen.getByRole('heading', { name: 'Memory Inspect' })).toBeVisible()
-  await expect.element(screen.getByText('12 / 2200')).toBeVisible()
-  const entries = await screen.getByLabelText('记忆条目').element()
-  expect(entries.textContent || '').toContain('第一条记忆')
+  await expect.element(screen.getByLabelText('记忆文件').getByText('12 / 2200')).toBeVisible()
+  await expect.element(screen.getByLabelText('记忆条目').getByText('第一条记忆')).toBeVisible()
   expect(fetchMock).toHaveBeenCalledWith('/api/hermes/inspect/memory')
 
   await screen.getByRole('button', { name: /USER PROFILE/ }).click()
 
-  await expect.element(screen.getByText('4 / 1375')).toBeVisible()
-  const userEntries = await screen.getByLabelText('记忆条目').element()
-  expect(userEntries.textContent || '').toContain('用户偏好')
+  await expect.element(screen.getByLabelText('记忆文件').getByText('4 / 1375')).toBeVisible()
+  await expect.element(screen.getByLabelText('记忆条目').getByText('用户偏好')).toBeVisible()
 })
 
 test('MemoryInspectView shows missing file fallback', async () => {

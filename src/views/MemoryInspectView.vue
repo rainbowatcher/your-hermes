@@ -4,7 +4,13 @@
 -->
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
+import { Database, RefreshCw, Search } from 'lucide-vue-next'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { ScrollArea } from '@/components/ui/scroll-area'
 import { fetchMemoryInspect } from '@/api/hermes'
+import { cn } from '@/lib/utils'
 import type { MemoryInspectFile, MemoryInspectResponse } from '@/types/memory'
 
 interface MemorySection {
@@ -36,11 +42,33 @@ const inspect = ref<MemoryInspectResponse | null>(null)
 const activeKey = ref<keyof MemoryInspectResponse>('memory')
 const loading = ref(false)
 const error = ref<string | null>(null)
+const searchTerm = ref('')
 
 const activeSection = computed(
   () => sections.find((section) => section.key === activeKey.value) ?? sections[0],
 )
 const activeFile = computed(() => inspect.value?.[activeSection.value.key] ?? null)
+
+const totalEntries = computed(() => {
+  if (!inspect.value) return 0
+  return sections.reduce((count, section) => count + inspect.value![section.key].entries.length, 0)
+})
+
+const filteredEntries = computed(() => {
+  const entries = activeFile.value?.entries ?? []
+  const term = searchTerm.value.trim().toLowerCase()
+  if (!term) return entries
+  return entries.filter((entry) => entry.content.toLowerCase().includes(term))
+})
+
+const metadataEntries = computed(() => [
+  { label: 'file', value: activeSection.value.fileName },
+  { label: 'status', value: activeFile.value?.exists ? 'exists' : 'missing' },
+  { label: 'characters', value: charUsage(activeFile.value, activeSection.value) },
+  { label: 'entries', value: String(activeFile.value?.entries.length ?? 0) },
+  { label: 'filtered', value: String(filteredEntries.value.length) },
+  { label: 'updated_at', value: formatDate(activeFile.value?.updatedAt ?? null) },
+])
 
 function formatDate(value: string | null) {
   if (!value) return '未更新'
@@ -53,6 +81,10 @@ function formatDate(value: string | null) {
 function charUsage(file: MemoryInspectFile | null, section: MemorySection) {
   if (!file) return '0 / ' + section.charLimit
   return `${file.charCount} / ${section.charLimit}`
+}
+
+function selectSection(key: keyof MemoryInspectResponse) {
+  activeKey.value = key
 }
 
 async function loadInspect() {
@@ -73,286 +105,232 @@ onMounted(() => {
 </script>
 
 <template>
-  <main class="memory-inspect-page">
-    <header class="page-header">
-      <div>
-        <p class="eyebrow">Inspect</p>
-        <h1>Memory Inspect</h1>
-        <p class="subtitle">
-          只读查看本机 Hermes 持久记忆快照。此页面不展示绝对路径，也不提供编辑能力。
-        </p>
+  <main class="flex h-screen min-h-0 flex-col bg-background text-foreground">
+    <header class="border-b border-border/70 px-3 py-2 lg:px-4">
+      <div class="flex flex-col gap-2 xl:flex-row xl:items-center xl:justify-between">
+        <div class="relative min-w-0 xl:w-96">
+          <Search
+            class="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground"
+          />
+          <Input
+            v-model="searchTerm"
+            class="h-8 pl-8"
+            placeholder="搜索记忆内容"
+            aria-label="搜索记忆内容"
+          />
+        </div>
+
+        <div class="flex items-center justify-between gap-2 xl:justify-end">
+          <Badge variant="outline" class="font-mono text-[10px] uppercase tracking-wide">
+            {{ totalEntries }} entries
+          </Badge>
+          <Button variant="ghost" size="sm" :disabled="loading" @click="loadInspect">
+            <RefreshCw :class="cn('size-3.5', loading && 'animate-spin')" />
+            {{ loading ? '刷新中…' : '刷新' }}
+          </Button>
+        </div>
       </div>
-      <button class="refresh-button" type="button" :disabled="loading" @click="loadInspect">
-        {{ loading ? '刷新中…' : '刷新' }}
-      </button>
     </header>
 
-    <div v-if="error" class="error-banner" role="alert">
+    <div
+      v-if="error"
+      class="border-b border-destructive/30 bg-destructive/10 px-4 py-2 text-xs text-destructive"
+      role="alert"
+    >
       {{ error }}
     </div>
 
-    <section class="tabs" aria-label="记忆文件">
-      <button
-        v-for="section in sections"
-        :key="section.key"
-        class="tab-button"
-        :class="{ active: activeKey === section.key }"
-        type="button"
-        @click="activeKey = section.key"
+    <div class="flex min-h-0 flex-1 overflow-hidden">
+      <aside
+        aria-label="记忆文件"
+        class="flex min-h-0 w-full flex-col border-r border-border/70 bg-card/35 xl:w-80 xl:shrink-0"
       >
-        <span>{{ section.title }}</span>
-        <small>{{ section.fileName }}</small>
-      </button>
-    </section>
-
-    <section class="summary-grid" aria-label="记忆摘要">
-      <article class="summary-card">
-        <span class="summary-label">文件</span>
-        <strong>{{ activeSection.fileName }}</strong>
-      </article>
-      <article class="summary-card">
-        <span class="summary-label">状态</span>
-        <strong>{{ activeFile?.exists ? '存在' : '缺失' }}</strong>
-      </article>
-      <article class="summary-card">
-        <span class="summary-label">字符数</span>
-        <strong>{{ charUsage(activeFile, activeSection) }}</strong>
-      </article>
-      <article class="summary-card">
-        <span class="summary-label">条目数</span>
-        <strong>{{ activeFile?.entries.length ?? 0 }}</strong>
-      </article>
-      <article class="summary-card wide">
-        <span class="summary-label">更新时间</span>
-        <strong>{{ formatDate(activeFile?.updatedAt ?? null) }}</strong>
-      </article>
-    </section>
-
-    <section class="content-panel">
-      <div class="panel-header">
-        <div>
-          <h2>{{ activeSection.title }}</h2>
-          <p>{{ activeSection.description }}</p>
-        </div>
-      </div>
-
-      <div v-if="loading && !inspect" class="empty-state">正在加载记忆快照…</div>
-      <div v-else-if="activeFile && !activeFile.exists" class="empty-state">
-        未找到 {{ activeSection.fileName }}。缺失文件会以空快照展示，不影响页面使用。
-      </div>
-      <template v-else-if="activeFile">
-        <div class="entries" role="region" aria-label="记忆条目">
-          <article v-for="entry in activeFile.entries" :key="entry.index" class="entry-card">
-            <div class="entry-meta">
-              <span>#{{ entry.index + 1 }}</span>
-              <span>{{ entry.charCount }} 字符</span>
-            </div>
-            <p>{{ entry.content }}</p>
-          </article>
-          <div v-if="activeFile.entries.length === 0" class="empty-state">
-            文件为空或没有可解析条目。
+        <div class="border-b border-border/70 px-3 py-2">
+          <div class="flex items-center justify-between">
+            <p class="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground/80">
+              Memory Files
+            </p>
+            <Badge variant="outline" class="font-mono text-[10px] uppercase tracking-wide">
+              {{ sections.length }}
+            </Badge>
           </div>
         </div>
 
-        <details class="raw-content">
-          <summary>查看 raw content</summary>
-          <pre>{{ activeFile.rawContent || '(空)' }}</pre>
-        </details>
-      </template>
-    </section>
+        <ScrollArea class="min-h-0 flex-1">
+          <div class="p-2">
+            <section class="overflow-hidden rounded-md border border-border/60 bg-muted/10">
+              <button
+                v-for="section in sections"
+                :key="section.key"
+                :class="
+                  cn(
+                    'flex w-full items-start gap-2 px-2 py-2 text-left transition-colors',
+                    activeKey === section.key
+                      ? 'bg-primary/10 text-foreground shadow-[inset_0_0_0_1px_color-mix(in_oklab,var(--primary)_25%,transparent)]'
+                      : 'text-muted-foreground hover:bg-muted/30 hover:text-foreground',
+                  )
+                "
+                type="button"
+                @click="selectSection(section.key)"
+              >
+                <Database class="mt-0.5 size-3.5 shrink-0" />
+                <div class="min-w-0 flex-1">
+                  <div class="flex items-center justify-between gap-2">
+                    <p class="truncate text-xs font-medium">{{ section.title }}</p>
+                    <span class="font-mono text-[10px]">
+                      {{ inspect?.[section.key].entries.length ?? 0 }}
+                    </span>
+                  </div>
+                  <p class="mt-1 truncate font-mono text-[10px] text-muted-foreground">
+                    {{ section.fileName }}
+                  </p>
+                  <p class="mt-1 line-clamp-2 text-[11px] leading-4">
+                    {{ section.description }}
+                  </p>
+                  <div class="mt-1 flex flex-wrap gap-1">
+                    <span
+                      class="rounded bg-muted px-1 py-0.5 font-mono text-[9px] text-muted-foreground"
+                    >
+                      {{ inspect?.[section.key].exists ? 'exists' : 'missing' }}
+                    </span>
+                    <span
+                      class="rounded bg-muted px-1 py-0.5 font-mono text-[9px] text-muted-foreground"
+                    >
+                      {{ charUsage(inspect?.[section.key] ?? null, section) }}
+                    </span>
+                  </div>
+                </div>
+              </button>
+            </section>
+          </div>
+        </ScrollArea>
+      </aside>
+
+      <section class="flex min-h-0 flex-1 flex-col bg-background">
+        <div class="border-b border-border/70 px-4 py-3">
+          <div class="flex flex-wrap items-start justify-between gap-3">
+            <div class="min-w-0">
+              <p class="font-mono text-[10px] uppercase tracking-wide text-muted-foreground">
+                Inspect / {{ activeSection.fileName }}
+              </p>
+              <h1 class="mt-1 truncate text-lg font-semibold text-foreground">Memory Inspect</h1>
+              <p class="mt-1 text-sm text-muted-foreground">
+                {{ activeSection.title }} · {{ activeSection.description }}
+              </p>
+            </div>
+            <div class="flex flex-wrap gap-1">
+              <Badge variant="secondary" class="font-mono text-[10px]">
+                {{ activeFile?.exists ? 'exists' : 'missing' }}
+              </Badge>
+              <Badge variant="secondary" class="font-mono text-[10px]">
+                {{ activeFile?.entries.length ?? 0 }} entries
+              </Badge>
+              <Badge variant="secondary" class="font-mono text-[10px]"> read-only </Badge>
+            </div>
+          </div>
+        </div>
+
+        <div
+          class="grid min-h-0 flex-1 gap-3 overflow-hidden p-3 lg:grid-cols-[minmax(0,1fr)_280px] lg:p-4"
+        >
+          <div class="min-h-0 overflow-hidden rounded-lg border border-border/70 bg-card/30">
+            <ScrollArea class="h-full">
+              <div class="p-4">
+                <div
+                  v-if="loading && !inspect"
+                  class="py-10 text-center text-xs text-muted-foreground"
+                >
+                  正在加载记忆快照…
+                </div>
+                <div
+                  v-else-if="activeFile && !activeFile.exists"
+                  class="py-10 text-center text-xs text-muted-foreground"
+                >
+                  未找到 {{ activeSection.fileName }}。缺失文件会以空快照展示，不影响页面使用。
+                </div>
+                <template v-else-if="activeFile">
+                  <section class="space-y-2" role="region" aria-label="记忆条目">
+                    <article
+                      v-for="entry in filteredEntries"
+                      :key="entry.index"
+                      class="rounded-lg border border-border/60 bg-card/35 p-3"
+                    >
+                      <div
+                        class="mb-2 flex items-center justify-between gap-2 text-[10px] text-muted-foreground"
+                      >
+                        <span class="font-mono">#{{ entry.index + 1 }}</span>
+                        <span class="font-mono">{{ entry.charCount }} 字符</span>
+                      </div>
+                      <p class="whitespace-pre-wrap text-sm leading-6 text-foreground">
+                        {{ entry.content }}
+                      </p>
+                    </article>
+                    <div
+                      v-if="filteredEntries.length === 0"
+                      class="py-10 text-center text-xs text-muted-foreground"
+                    >
+                      当前筛选下没有记忆条目。
+                    </div>
+                  </section>
+
+                  <details class="mt-3 rounded-lg border border-border/60 bg-card/35 p-3">
+                    <summary class="cursor-pointer text-xs font-medium text-muted-foreground">
+                      Raw Content
+                    </summary>
+                    <pre
+                      class="mt-3 overflow-x-auto whitespace-pre-wrap text-xs leading-5 text-foreground"
+                      >{{ activeFile.rawContent || '(空)' }}</pre
+                    >
+                  </details>
+                </template>
+              </div>
+            </ScrollArea>
+          </div>
+
+          <aside class="min-h-0 overflow-auto rounded-lg border border-border/70 bg-card/35 p-3">
+            <section>
+              <h2 class="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                Metadata
+              </h2>
+              <div class="mt-2 space-y-2">
+                <div
+                  v-for="entry in metadataEntries"
+                  :key="entry.label"
+                  class="rounded border border-border/60 p-2"
+                >
+                  <p class="font-mono text-[10px] text-muted-foreground">{{ entry.label }}</p>
+                  <pre class="mt-1 whitespace-pre-wrap break-words text-xs text-foreground">{{
+                    entry.value
+                  }}</pre>
+                </div>
+              </div>
+            </section>
+
+            <section class="mt-5">
+              <h2 class="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                Scope
+              </h2>
+              <div class="mt-2 space-y-1">
+                <p
+                  class="rounded bg-muted/20 px-2 py-1 font-mono text-[10px] text-muted-foreground"
+                >
+                  local Hermes memory snapshot
+                </p>
+                <p
+                  class="rounded bg-muted/20 px-2 py-1 font-mono text-[10px] text-muted-foreground"
+                >
+                  no absolute paths exposed
+                </p>
+                <p
+                  class="rounded bg-muted/20 px-2 py-1 font-mono text-[10px] text-muted-foreground"
+                >
+                  no edit/delete actions
+                </p>
+              </div>
+            </section>
+          </aside>
+        </div>
+      </section>
+    </div>
   </main>
 </template>
-
-<style scoped>
-.memory-inspect-page {
-  min-height: 100vh;
-  background: #0f172a;
-  color: #e2e8f0;
-  padding: 32px;
-}
-
-.page-header {
-  display: flex;
-  justify-content: space-between;
-  gap: 24px;
-  align-items: flex-start;
-  margin-bottom: 24px;
-}
-
-.eyebrow {
-  color: #38bdf8;
-  font-size: 0.8rem;
-  font-weight: 700;
-  letter-spacing: 0.14em;
-  margin: 0 0 8px;
-  text-transform: uppercase;
-}
-
-h1,
-h2,
-p {
-  margin-top: 0;
-}
-
-h1 {
-  font-size: 2.25rem;
-  margin-bottom: 8px;
-}
-
-.subtitle,
-.panel-header p {
-  color: #94a3b8;
-}
-
-.refresh-button,
-.tab-button {
-  border: 1px solid rgba(148, 163, 184, 0.28);
-  background: rgba(15, 23, 42, 0.8);
-  color: #e2e8f0;
-  border-radius: 14px;
-  cursor: pointer;
-}
-
-.refresh-button {
-  padding: 10px 16px;
-}
-
-.refresh-button:disabled {
-  cursor: not-allowed;
-  opacity: 0.6;
-}
-
-.error-banner {
-  background: rgba(248, 113, 113, 0.12);
-  border: 1px solid rgba(248, 113, 113, 0.45);
-  border-radius: 16px;
-  color: #fecaca;
-  margin-bottom: 20px;
-  padding: 14px 16px;
-}
-
-.tabs {
-  display: flex;
-  gap: 12px;
-  margin-bottom: 20px;
-}
-
-.tab-button {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding: 12px 18px;
-  text-align: left;
-}
-
-.tab-button.active {
-  background: rgba(14, 165, 233, 0.18);
-  border-color: rgba(56, 189, 248, 0.72);
-}
-
-.tab-button small,
-.summary-label,
-.entry-meta {
-  color: #94a3b8;
-  font-size: 0.78rem;
-}
-
-.summary-grid {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 14px;
-  margin-bottom: 20px;
-}
-
-.summary-card,
-.content-panel,
-.entry-card,
-.raw-content {
-  background: rgba(15, 23, 42, 0.72);
-  border: 1px solid rgba(148, 163, 184, 0.2);
-  border-radius: 18px;
-}
-
-.summary-card {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 16px;
-}
-
-.summary-card.wide {
-  grid-column: span 2;
-}
-
-.content-panel {
-  padding: 22px;
-}
-
-.panel-header {
-  border-bottom: 1px solid rgba(148, 163, 184, 0.16);
-  margin-bottom: 18px;
-  padding-bottom: 16px;
-}
-
-.entries {
-  display: grid;
-  gap: 12px;
-}
-
-.entry-card {
-  padding: 16px;
-}
-
-.entry-meta {
-  display: flex;
-  justify-content: space-between;
-  margin-bottom: 10px;
-}
-
-.entry-card p {
-  line-height: 1.75;
-  margin-bottom: 0;
-  white-space: pre-wrap;
-}
-
-.empty-state {
-  color: #94a3b8;
-  padding: 28px;
-  text-align: center;
-}
-
-.raw-content {
-  margin-top: 16px;
-  padding: 14px 16px;
-}
-
-.raw-content summary {
-  cursor: pointer;
-  font-weight: 700;
-}
-
-.raw-content pre {
-  color: #cbd5e1;
-  overflow-x: auto;
-  white-space: pre-wrap;
-}
-
-@media (max-width: 900px) {
-  .memory-inspect-page {
-    padding: 20px;
-  }
-
-  .page-header,
-  .tabs {
-    flex-direction: column;
-  }
-
-  .summary-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .summary-card.wide {
-    grid-column: auto;
-  }
-}
-</style>
