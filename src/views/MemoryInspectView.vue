@@ -4,13 +4,14 @@
 -->
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { Database, RefreshCw, Search } from 'lucide-vue-next'
+import { Database, MoonStar, RefreshCw, Search, SunMedium } from 'lucide-vue-next'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { fetchMemoryInspect } from '@/api/hermes'
 import { cn } from '@/lib/utils'
+import { useThemeStore } from '@/stores/theme'
 import type { MemoryInspectFile, MemoryInspectResponse } from '@/types/memory'
 
 interface MemorySection {
@@ -35,6 +36,7 @@ const sections: MemorySection[] = [
   },
 ]
 
+const theme = useThemeStore()
 const inspect = ref<MemoryInspectResponse | null>(null)
 const activeKey = ref<keyof MemoryInspectResponse>('memory')
 const loading = ref(false)
@@ -107,32 +109,6 @@ onMounted(() => {
 
 <template>
   <main class="flex h-full min-h-0 flex-col overflow-hidden bg-background text-foreground">
-    <header class="px-3 py-2 lg:px-4">
-      <div class="flex flex-col gap-2 xl:flex-row xl:items-center xl:justify-between">
-        <div class="relative min-w-0 xl:w-96">
-          <Search
-            class="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground"
-          />
-          <Input
-            v-model="searchTerm"
-            class="h-8 pl-8"
-            placeholder="搜索记忆内容"
-            aria-label="搜索记忆内容"
-          />
-        </div>
-
-        <div class="flex items-center justify-between gap-2 xl:justify-end">
-          <Badge variant="outline" class="font-mono text-[10px] uppercase tracking-wide">
-            {{ totalEntries }} entries
-          </Badge>
-          <Button variant="ghost" size="sm" :disabled="loading" @click="loadInspect">
-            <RefreshCw :class="cn('size-3.5', loading && 'animate-spin')" />
-            {{ loading ? '刷新中…' : '刷新' }}
-          </Button>
-        </div>
-      </div>
-    </header>
-
     <div
       v-if="error"
       class="border-b border-destructive/30 bg-destructive/10 px-4 py-2 text-xs text-destructive"
@@ -208,28 +184,63 @@ onMounted(() => {
       </aside>
 
       <section class="flex min-h-0 flex-1 flex-col bg-background">
-        <div class="border-b border-border/70 px-4 py-3">
-          <div class="flex flex-wrap items-start justify-between gap-3">
-            <div class="min-w-0">
-              <p class="font-mono text-[10px] uppercase tracking-wide text-muted-foreground">
-                Inspect / {{ activeSection.fileName }}
-              </p>
-              <h1 class="mt-1 truncate text-lg font-semibold text-foreground">Memory Inspect</h1>
-              <p class="mt-1 text-sm text-muted-foreground">
-                {{ activeSection.title }} · {{ activeSection.description }}
-              </p>
+        <header aria-label="记忆详情头部" class="border-b border-border/70 px-4 py-3">
+          <div class="flex flex-col gap-3">
+            <div class="flex flex-col gap-2 xl:flex-row xl:items-center xl:justify-between">
+              <div class="relative min-w-0 xl:w-96">
+                <Search
+                  class="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground"
+                />
+                <Input
+                  v-model="searchTerm"
+                  class="h-8 pl-8"
+                  placeholder="搜索记忆内容"
+                  aria-label="搜索记忆内容"
+                />
+              </div>
+
+              <div class="flex items-center justify-between gap-2 xl:justify-end">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  :title="theme.isDark ? '切换到浅色模式' : '切换到深色模式'"
+                  @click="theme.toggleTheme"
+                >
+                  <MoonStar v-if="theme.isDark" class="size-3.5" />
+                  <SunMedium v-else class="size-3.5" />
+                </Button>
+                <Badge variant="outline" class="font-mono text-[10px] uppercase tracking-wide">
+                  {{ totalEntries }} entries
+                </Badge>
+                <Button variant="ghost" size="sm" :disabled="loading" @click="loadInspect">
+                  <RefreshCw :class="cn('size-3.5', loading && 'animate-spin')" />
+                  {{ loading ? '刷新中…' : '刷新' }}
+                </Button>
+              </div>
             </div>
-            <div class="flex flex-wrap gap-1">
-              <Badge variant="secondary" class="font-mono text-[10px]">
-                {{ activeFile?.exists ? 'exists' : 'missing' }}
-              </Badge>
-              <Badge variant="secondary" class="font-mono text-[10px]">
-                {{ activeFile?.entries.length ?? 0 }} entries
-              </Badge>
-              <Badge variant="secondary" class="font-mono text-[10px]"> read-only </Badge>
+
+            <div class="flex flex-wrap items-start justify-between gap-3">
+              <div class="min-w-0">
+                <p class="font-mono text-[10px] uppercase tracking-wide text-muted-foreground">
+                  Inspect / {{ activeSection.fileName }}
+                </p>
+                <h1 class="mt-1 truncate text-lg font-semibold text-foreground">Memory Inspect</h1>
+                <p class="mt-1 text-sm text-muted-foreground">
+                  {{ activeSection.title }} · {{ activeSection.description }}
+                </p>
+              </div>
+              <div class="flex flex-wrap gap-1">
+                <Badge variant="secondary" class="font-mono text-[10px]">
+                  {{ activeFile?.exists ? 'exists' : 'missing' }}
+                </Badge>
+                <Badge variant="secondary" class="font-mono text-[10px]">
+                  {{ activeFile?.entries.length ?? 0 }} entries
+                </Badge>
+                <Badge variant="secondary" class="font-mono text-[10px]"> read-only </Badge>
+              </div>
             </div>
           </div>
-        </div>
+        </header>
 
         <div
           class="grid min-h-0 flex-1 gap-3 overflow-hidden p-3 lg:grid-cols-[minmax(0,1fr)_280px] lg:p-4"

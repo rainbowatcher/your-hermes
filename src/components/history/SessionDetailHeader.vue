@@ -25,7 +25,7 @@ defineProps<{
 </script>
 
 <template>
-  <div class="border-b border-border/70 px-3 py-2 lg:px-4">
+  <div aria-label="会话详情头部" class="border-b border-border/70 px-3 py-2 lg:px-4">
     <div class="flex items-center gap-2">
       <h2
         class="min-w-0 flex-1 truncate text-sm font-semibold text-foreground"

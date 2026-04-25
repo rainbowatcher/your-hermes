@@ -42,7 +42,7 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-test('SkillManagementView loads list, syncs query path and shows selected skill', async () => {
+test('SkillManagementView merges search and theme controls into the detail header', async () => {
   const fetchMock = vi.fn<(input: RequestInfo | URL) => Promise<Response>>(async (input) => {
     const url = String(input)
     if (url.includes('/api/hermes/skills/detail')) {
@@ -63,11 +63,19 @@ test('SkillManagementView loads list, syncs query path and shows selected skill'
 
   await expect.element(screen.getByRole('heading', { name: 'Writing Plans' })).toBeVisible()
   await expect.element(screen.getByText('templates/plan.md')).toBeVisible()
+
+  const detailHeader = screen.container.querySelector('[aria-label="技能详情头部"]')
+  const mergedSearch = detailHeader?.querySelector('input[placeholder="搜索技能名、路径、标签"]')
+  const themeButton = detailHeader?.querySelector('button[title="切换到浅色模式"]')
+
+  expect(detailHeader).not.toBeNull()
+  expect(mergedSearch).not.toBeNull()
+  expect(themeButton).not.toBeNull()
   expect(fetchMock).toHaveBeenCalled()
   expect(router.currentRoute.value.query.path).toBe('software-development/writing-plans')
 })
 
-test('SkillManagementView search filters list items', async () => {
+test('SkillManagementView keeps merged controls available when no skill is selected', async () => {
   const fetchMock = vi.fn<(input: RequestInfo | URL) => Promise<Response>>(async (input) => {
     const url = String(input)
     if (url.includes('/api/hermes/skills/detail')) {
@@ -86,7 +94,13 @@ test('SkillManagementView search filters list items', async () => {
     },
   })
 
-  const input = screen.getByPlaceholder('搜索技能名、路径、标签')
+  const detailHeader = await screen.getByLabelText('技能详情头部').element()
+  const input = screen.getByLabelText('搜索技能名、路径、标签')
+  const themeButton = detailHeader.querySelector('button[aria-label="切换到浅色模式"]')
+
+  expect(detailHeader.textContent || '').toContain('请选择左侧技能。')
+  expect(themeButton).not.toBeNull()
+
   await input.fill('ascii')
 
   await expect.element(screen.getByRole('button', { name: /ASCII Art/ })).toBeVisible()

@@ -7,7 +7,6 @@ import { onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import SkillDetail from '@/components/skills/SkillDetail.vue'
 import SkillList from '@/components/skills/SkillList.vue'
-import SkillsToolbar from '@/components/skills/SkillsToolbar.vue'
 import { useSkillsStore } from '@/stores/skills'
 import { useThemeStore } from '@/stores/theme'
 
@@ -70,14 +69,6 @@ function openSkill(relativePath: string) {
 
 <template>
   <div class="flex h-full min-h-0 flex-col overflow-hidden bg-background text-foreground">
-    <SkillsToolbar
-      :is-dark="theme.isDark"
-      :search="store.search"
-      :total="store.skills.length"
-      @toggle-theme="theme.toggleTheme"
-      @update:search="store.setSearch"
-    />
-
     <div
       v-if="store.loadError"
       class="border-b border-amber-500/20 bg-amber-500/8 px-5 py-2 text-xs text-amber-100"
@@ -92,7 +83,15 @@ function openSkill(relativePath: string) {
         :selected-path="store.selectedPath"
         @select="openSkill"
       />
-      <SkillDetail :is-loading="store.isLoadingDetail" :skill="store.selectedSkill" />
+      <SkillDetail
+        :is-dark="theme.isDark"
+        :is-loading="store.isLoadingDetail"
+        :search="store.search"
+        :skill="store.selectedSkill"
+        :total="store.skills.length"
+        @toggle-theme="theme.toggleTheme"
+        @update:search="store.setSearch"
+      />
     </div>
   </div>
 </template>

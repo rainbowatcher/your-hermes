@@ -75,9 +75,7 @@ const statusItems = [
 </script>
 
 <template>
-  <aside
-    class="flex min-h-0 flex-col border-r border-border/70 bg-card/35 xl:min-w-[320px] xl:max-w-90"
-  >
+  <aside class="flex min-h-0 flex-col">
     <div class="border-b border-border/70 px-3 py-2">
       <div class="flex items-center justify-between">
         <p class="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground/80">

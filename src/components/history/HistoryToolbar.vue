@@ -3,23 +3,17 @@
   不负责：列表分组筛选与详情渲染。
 -->
 <script setup lang="ts">
-import { ArrowDownWideNarrow, Clock3, MoonStar, Search, SunMedium } from 'lucide-vue-next'
+import { ArrowDownWideNarrow, Clock3, Search } from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import type { SessionSort } from '@/stores/session-history'
 
 const props = defineProps<{
-  activeCount: number
-  attentionCount: number
-  issueCount: number
-  isDark: boolean
   search: string
   sort: SessionSort
-  total: number
 }>()
 
 const emits = defineEmits<{
-  (event: 'toggle-theme'): void
   (event: 'update:search', value: string): void
   (event: 'update:sort', value: SessionSort): void
 }>()
@@ -27,9 +21,9 @@ const emits = defineEmits<{
 
 <template>
   <div class="px-3 py-2 lg:px-4">
-    <div class="flex flex-col gap-2 xl:flex-row xl:items-center xl:justify-between">
+    <div class="flex flex-col gap-2">
       <div class="flex min-w-0 items-center gap-2">
-        <div class="relative min-w-0 flex-1 xl:w-80">
+        <div class="relative min-w-0 flex-1">
           <Search
             class="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground"
           />
@@ -59,28 +53,6 @@ const emits = defineEmits<{
           >
             <ArrowDownWideNarrow class="size-3.5" />
           </Button>
-        </div>
-      </div>
-
-      <div class="flex items-center justify-between gap-2 xl:justify-end">
-        <Button
-          variant="ghost"
-          size="sm"
-          :title="props.isDark ? '切换到浅色模式' : '切换到深色模式'"
-          @click="emits('toggle-theme')"
-        >
-          <MoonStar v-if="props.isDark" class="size-3.5" />
-          <SunMedium v-else class="size-3.5" />
-        </Button>
-
-        <div class="flex items-center gap-1.5 font-mono text-[10px] text-muted-foreground">
-          <span :title="`全部 ${props.total}`">{{ props.total }}</span>
-          <span class="text-border">/</span>
-          <span :title="`活跃 ${props.activeCount}`">{{ props.activeCount }}</span>
-          <span class="text-border">/</span>
-          <span :title="`关注 ${props.attentionCount}`">{{ props.attentionCount }}</span>
-          <span class="text-border">/</span>
-          <span :title="`工具异常 ${props.issueCount}`">{{ props.issueCount }}</span>
         </div>
       </div>
     </div>

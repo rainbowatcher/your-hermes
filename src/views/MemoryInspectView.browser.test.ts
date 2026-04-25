@@ -1,5 +1,6 @@
 import { afterEach, expect, test, vi } from 'vitest'
 import { render } from 'vitest-browser-vue'
+import { createPinia } from 'pinia'
 import MemoryInspectView from './MemoryInspectView.vue'
 
 const memoryResponse = {
@@ -28,15 +29,26 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-test('MemoryInspectView loads memory inspect snapshot and switches tabs', async () => {
+test('MemoryInspectView merges search and controls into the detail header while preserving inspect tabs', async () => {
   const fetchMock = vi.fn<(input: RequestInfo | URL) => Promise<Response>>(async () => {
     return new Response(JSON.stringify(memoryResponse), { status: 200 })
   })
   vi.stubGlobal('fetch', fetchMock)
 
-  const screen = await render(MemoryInspectView)
+  const screen = await render(MemoryInspectView, {
+    global: {
+      plugins: [createPinia()],
+    },
+  })
 
   await expect.element(screen.getByRole('heading', { name: 'Memory Inspect' })).toBeVisible()
+  const detailHeader = screen.container.querySelector('[aria-label="记忆详情头部"]')
+  const mergedSearch = detailHeader?.querySelector('input[aria-label="搜索记忆内容"]')
+  const refreshButton = detailHeader?.querySelector('button:last-of-type')
+
+  expect(detailHeader).not.toBeNull()
+  expect(mergedSearch).not.toBeNull()
+  expect(refreshButton?.textContent).toContain('刷新')
   await expect.element(screen.getByLabelText('记忆文件').getByText('12 / 2200')).toBeVisible()
   await expect.element(screen.getByLabelText('容量阈值').getByText('2200')).toBeVisible()
   await expect.element(screen.getByLabelText('记忆条目').getByText('第一条记忆')).toBeVisible()
@@ -88,7 +100,11 @@ test('MemoryInspectView shows missing file fallback', async () => {
   })
   vi.stubGlobal('fetch', fetchMock)
 
-  const screen = await render(MemoryInspectView)
+  const screen = await render(MemoryInspectView, {
+    global: {
+      plugins: [createPinia()],
+    },
+  })
 
   await expect
     .element(screen.getByText('未找到 MEMORY.md。缺失文件会以空快照展示，不影响页面使用。'))
