@@ -5,7 +5,25 @@
 import { readFile, stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import { homedir } from 'node:os'
-import type { MemoryInspectFile, MemoryInspectResponse } from '../src/types/memory'
+
+export interface MemoryInspectEntry {
+  index: number
+  content: string
+  charCount: number
+}
+
+export interface MemoryInspectFile {
+  exists: boolean
+  updatedAt: string | null
+  rawContent: string
+  charCount: number
+  entries: MemoryInspectEntry[]
+}
+
+export interface MemoryInspectResponse {
+  memory: MemoryInspectFile
+  user: MemoryInspectFile
+}
 
 interface LoadMemoryInspectOptions {
   hermesHome?: string
@@ -23,7 +41,7 @@ function resolveHermesHome(hermesHome?: string) {
   return hermesHome || process.env.HERMES_HOME || join(homedir(), '.hermes')
 }
 
-function parseMemoryEntries(rawContent: string) {
+function parseMemoryEntries(rawContent: string): MemoryInspectEntry[] {
   return rawContent
     .split(/\r?\n\s*§\s*\r?\n/g)
     .map((content) => content.trim())

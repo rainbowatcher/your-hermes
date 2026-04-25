@@ -1,5 +1,7 @@
 # Memory Inspect 实现计划
 
+> 本文档是 Memory Inspect 实现计划的仓库内 canonical 版本；不要再提交重复的 agent 执行副本。
+>
 > **For Hermes:** 当前阶段只做计划，不实现代码；计划修订后如要执行，可按最小可执行版本落地，并在实现前再次做 Codex review。
 
 **Goal:** 在 `your-hermes` 中增加一个只读的 Memory Inspect 页面，用于查看本地 Hermes 持久记忆文件的当前快照状态。
