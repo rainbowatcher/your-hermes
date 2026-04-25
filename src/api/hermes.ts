@@ -3,6 +3,7 @@
  * 不负责：状态缓存与界面派生逻辑。
  */
 import type { SessionDetail, SessionSummary } from '@/types/history'
+import type { MemoryInspectResponse } from '@/types/memory'
 import type { SkillDetail, SkillSummary } from '@/types/skills'
 
 async function requestJson<T>(url: string): Promise<T> {
@@ -22,6 +23,10 @@ export async function fetchSessionDetail(sessionId: string) {
   return await requestJson<{ session: SessionDetail | null }>(
     `/api/hermes/sessions/${encodeURIComponent(sessionId)}`,
   )
+}
+
+export async function fetchMemoryInspect() {
+  return await requestJson<MemoryInspectResponse>('/api/hermes/inspect/memory')
 }
 
 export async function fetchSkills() {

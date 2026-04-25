@@ -5,6 +5,7 @@
 import type { ServerResponse } from 'node:http'
 import { loadSkillDetail, loadSkillSummaries, isValidSkillPath } from '../hermes-skills.ts'
 import { loadSessionDetail, loadSessionSummaries } from '../hermes-sessions.ts'
+import { loadMemoryInspect } from '../hermes-memory.ts'
 
 function sendJson(res: ServerResponse, statusCode: number, body: unknown) {
   res.statusCode = statusCode
@@ -34,6 +35,12 @@ export async function handleHermesApiRequest(urlPath: string, res: ServerRespons
     const sessionId = decodeURIComponent(requestUrl.pathname.slice('/api/hermes/sessions/'.length))
     const session = await loadSessionDetail(sessionId)
     sendJson(res, session ? 200 : 404, { session })
+    return true
+  }
+
+  if (requestUrl.pathname === '/api/hermes/inspect/memory') {
+    const memoryInspect = await loadMemoryInspect()
+    sendJson(res, 200, memoryInspect)
     return true
   }
 

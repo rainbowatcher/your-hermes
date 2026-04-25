@@ -21,5 +21,10 @@ export const router = createRouter({
       name: 'skills',
       component: () => import('@/views/SkillManagementView.vue'),
     },
+    {
+      path: '/inspect/memory',
+      name: 'memory-inspect',
+      component: () => import('@/views/MemoryInspectView.vue'),
+    },
   ],
 })
